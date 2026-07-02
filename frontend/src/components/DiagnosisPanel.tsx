@@ -1,8 +1,46 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { useApp } from '../contexts/AppContext'
 import { chatStream } from '../api/diagnosis'
-import ChatMessage from './ChatMessage'
 import type { ChatMessage as ChatMsg } from '../types'
+
+function renderMd(text: string): string {
+  let html = text
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/^### (.+)$/gm, '<h4>$1</h4>')
+    .replace(/^## (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^# (.+)$/gm, '<h2>$1</h2>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/^\|[-:\s|]+\|$/gm, '')
+    .replace(/^\|(.+)\|$/gm, (_, cells) => {
+      const tds = cells.split('|').map((c: string) =>
+        `<td>${c.trim()}</td>`
+      ).join('')
+      return `<tr>${tds}</tr>`
+    })
+    .replace(/((?:<tr>.*<\/tr>\n?)+)/g, '<table>$1</table>')
+    .replace(/^- (.+)$/gm, '<li>$1</li>')
+    .replace(/((?:<li>.*<\/li>\n?)+)/g, '<ul>$1</ul>')
+    .replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>')
+    .replace(/\n/g, '<br/>')
+  return html
+}
+
+function MsgBubble({ msg }: { msg: ChatMsg }) {
+  const isUser = msg.role === 'user'
+  const html = useMemo(() => isUser ? msg.content : renderMd(msg.content), [msg.content, isUser])
+
+  return (
+    <div className={`msg-row ${isUser ? 'user' : 'assistant'}`}>
+      <div
+        className={`msg-bubble ${isUser ? 'user' : 'assistant'}`}
+        dangerouslySetInnerHTML={isUser ? undefined : { __html: html }}
+      >
+        {isUser ? msg.content : null}
+      </div>
+    </div>
+  )
+}
 
 export default function DiagnosisPanel() {
   const { state, dispatch } = useApp()
@@ -42,69 +80,54 @@ export default function DiagnosisPanel() {
         setLoading(false)
       },
       onError: (err) => {
-        setMessages(prev => [...prev, { role: 'assistant', content: `错误: ${err}` }])
+        setMessages(prev => [...prev, { role: 'assistant', content: `❌ ${err}` }])
         setStreamingContent('')
         setLoading(false)
       },
     })
   }
 
-  const newSession = () => {
-    setSessionId(null)
-    setMessages([])
-    setStreamingContent('')
-  }
-
   return (
-    <div style={{ background: '#222', borderRadius: 8, display: 'flex', flexDirection: 'column', height: 'calc(100vh - 80px)' }}>
-      <div style={{ padding: 12, borderBottom: '1px solid #333', display: 'flex', alignItems: 'center', gap: 8 }}>
-        <select value={skill} onChange={e => setSkill(e.target.value)}
-          style={{ background: '#333', color: '#ddd', border: '1px solid #444', borderRadius: 6, padding: '4px 8px' }}>
+    <>
+      <div className="chat-area">
+        {messages.length === 0 && !streamingContent && (
+          <div className="empty">
+            {state.currentStock
+              ? `已选中 ${state.currentStock.name}，在下方输入分析问题`
+              : '搜索一只股票，然后在下方使用 AI 分析'}
+          </div>
+        )}
+        {messages.map((m, i) => <MsgBubble key={i} msg={m} />)}
+        {streamingContent && <MsgBubble msg={{ role: 'assistant', content: streamingContent }} />}
+        <div ref={bottomRef} />
+      </div>
+
+      <div className="chat-input-area">
+        <select
+          className="skill-select"
+          value={skill}
+          onChange={e => setSkill(e.target.value)}
+          title="选择分析 Skill"
+        >
           {state.skills.length > 0
             ? state.skills.map(s => <option key={s.name} value={s.name}>{s.name}</option>)
             : <option value="默认分析">默认分析</option>
           }
         </select>
-        <button onClick={() => dispatch({ type: 'TOGGLE_SKILL_MANAGER' })}
-          style={{ background: 'none', border: 'none', color: '#999', cursor: 'pointer', fontSize: 16 }}
-          title="管理Skill">⚙</button>
-        <span style={{ color: '#666', fontSize: 12 }}>
-          {state.currentStock?.name || '选择股票'}
-        </span>
-        {sessionId && (
-          <>
-            <span style={{ color: '#555', fontSize: 11, marginLeft: 'auto' }}>#{sessionId.slice(0, 8)}</span>
-            <button onClick={newSession} style={{ background: '#444', color: '#aaa', border: 'none', borderRadius: 4, padding: '2px 6px', cursor: 'pointer', fontSize: 11 }}>新建</button>
-          </>
-        )}
-      </div>
-
-      <div style={{ flex: 1, overflowY: 'auto', padding: 12 }}>
-        {messages.length === 0 && !streamingContent && (
-          <div style={{ color: '#666', textAlign: 'center', marginTop: 40 }}>
-            选择 Skill 和股票后，输入分析问题开始对话
-          </div>
-        )}
-        {messages.map((m, i) => <ChatMessage key={i} role={m.role} content={m.content} />)}
-        {streamingContent && <ChatMessage role="assistant" content={streamingContent} streaming />}
-        <div ref={bottomRef} />
-      </div>
-
-      <div style={{ padding: 12, borderTop: '1px solid #333' }}>
         <textarea
           value={input}
           onChange={e => setInput(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
-          placeholder="输入分析问题... (Enter发送，Shift+Enter换行)"
-          rows={2}
-          style={{ width: '100%', background: '#333', color: '#ddd', border: '1px solid #444', borderRadius: 8, padding: 8, resize: 'none', fontSize: 14 }}
+          onKeyDown={e => {
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() }
+          }}
+          placeholder={state.currentStock ? `询问关于 ${state.currentStock.name} 的问题...` : '输入分析问题...'}
+          rows={1}
           disabled={loading}
         />
-        <button onClick={send} disabled={loading}
-          style={{ marginTop: 4, padding: '6px 16px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
+        <button onClick={send} disabled={loading}>
           {loading ? '分析中...' : '发送'}
         </button>
       </div>
-    </div>
+    </>
   )
 }

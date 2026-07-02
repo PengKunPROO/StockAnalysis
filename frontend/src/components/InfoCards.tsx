@@ -19,66 +19,41 @@ export default function InfoCards() {
 
   if (!stock) return null
 
-  const card = { background: '#222', borderRadius: 8, padding: 12, marginBottom: 8 }
-  const changeColor = (realtime?.change_pct || 0) >= 0 ? '#26a69a' : '#ef5350'
+  const pct = realtime?.change_pct ?? 0
+  const up = pct >= 0
 
   return (
-    <div style={{ marginTop: 8 }}>
-      <div style={{ display: 'flex', gap: 8 }}>
-        <div style={{ ...card, flex: 1 }}>
-          <div style={{ color: '#888', fontSize: 12 }}>最新价</div>
-          <div style={{ fontSize: 22, fontWeight: 700 }}>
-            {realtime?.price?.toFixed(2) || '--'}
-          </div>
-          <div style={{ color: changeColor }}>
-            {realtime?.change_pct != null ? `${realtime.change_pct > 0 ? '+' : ''}${realtime.change_pct.toFixed(2)}%` : '--'}
-          </div>
-        </div>
-        <div style={{ ...card, flex: 1 }}>
-          <div style={{ color: '#888', fontSize: 12 }}>PE / PB</div>
-          <div style={{ fontSize: 16 }}>
-            {financial?.pe_ratio?.toFixed(1) || '--'} / {financial?.pb_ratio?.toFixed(1) || '--'}
-          </div>
-        </div>
-        <div style={{ ...card, flex: 1 }}>
-          <div style={{ color: '#888', fontSize: 12 }}>ROE</div>
-          <div style={{ fontSize: 16 }}>{financial?.roe?.toFixed(1) || '--'}%</div>
-        </div>
+    <div>
+      <div className="price-header">
+        <span style={{ color: '#888', fontSize: 14 }}>{stock.name}</span>
+        <span style={{ color: '#555', fontSize: 12 }}>{stock.code}</span>
+        <span className="price">{realtime?.price?.toFixed(2) || '--'}</span>
+        <span className="change-pct" style={{ color: up ? '#22c55e' : '#ef4444' }}>
+          {pct > 0 ? '+' : ''}{pct.toFixed(2)}%
+        </span>
       </div>
-      <div style={{ display: 'flex', gap: 8 }}>
-        <div style={{ ...card, flex: 1 }}>
-          <div style={{ color: '#888', fontSize: 12 }}>MACD</div>
-          <div style={{ fontSize: 14 }}>
-            {indicators?.macd ? (
-              <span style={{ color: indicators.macd.macd > 0 ? '#26a69a' : '#ef5350' }}>
-                {indicators.macd.macd > 0 ? '金叉' : '死叉'} {indicators.macd.macd.toFixed(2)}
-              </span>
-            ) : '--'}
+      <div className="info-row">
+        <div className="info-card"><div className="lbl">成交量</div><div className="val">{realtime?.volume ? (realtime.volume / 10000).toFixed(0) + '万' : '--'}</div></div>
+        <div className="info-card"><div className="lbl">ROE</div><div className="val">{financial?.roe?.toFixed(1) || '--'}%</div></div>
+        <div className="info-card"><div className="lbl">负债率</div><div className="val">{financial?.debt_ratio?.toFixed(1) || '--'}%</div></div>
+        <div className="info-card"><div className="lbl">MACD</div>
+          <div className="val" style={{ color: (indicators?.macd?.macd ?? 0) > 0 ? '#22c55e' : '#ef4444' }}>
+            {indicators?.macd ? (indicators.macd.macd > 0 ? '金叉' : '死叉') + ' ' + indicators.macd.macd.toFixed(1) : '--'}
           </div>
         </div>
-        <div style={{ ...card, flex: 1 }}>
-          <div style={{ color: '#888', fontSize: 12 }}>RSI(14)</div>
-          <div style={{ fontSize: 14 }}>
-            {indicators?.rsi?.rsi14 != null ? (
-              <span style={{ color: indicators.rsi.rsi14 > 70 ? '#ef5350' : indicators.rsi.rsi14 < 30 ? '#26a69a' : '#ddd' }}>
-                {indicators.rsi.rsi14}
-                {indicators.rsi.rsi14 > 70 ? ' 超买' : indicators.rsi.rsi14 < 30 ? ' 超卖' : ''}
-              </span>
-            ) : '--'}
+        <div className="info-card"><div className="lbl">RSI(14)</div>
+          <div className="val" style={{ color: (indicators?.rsi?.rsi14 ?? 50) > 70 ? '#ef4444' : (indicators?.rsi?.rsi14 ?? 50) < 30 ? '#22c55e' : '#ddd' }}>
+            {indicators?.rsi?.rsi14?.toFixed(0) || '--'}
           </div>
         </div>
-        <div style={{ ...card, flex: 1 }}>
-          <div style={{ color: '#888', fontSize: 12 }}>KDJ</div>
-          <div style={{ fontSize: 14 }}>
-            {indicators?.kdj?.k != null
-              ? `K${indicators.kdj.k.toFixed(0)} D${indicators.kdj.d.toFixed(0)} J${indicators.kdj.j.toFixed(0)}`
-              : '--'}
+        <div className="info-card"><div className="lbl">KDJ</div>
+          <div className="val">
+            {indicators?.kdj?.k != null ? `K${indicators.kdj.k.toFixed(0)} D${indicators.kdj.d.toFixed(0)}` : '--'}
           </div>
         </div>
-        <div style={{ ...card, flex: 1 }}>
-          <div style={{ color: '#888', fontSize: 12 }}>负债率</div>
-          <div style={{ fontSize: 14 }}>
-            {financial?.debt_ratio?.toFixed(1) || '--'}%
+        <div className="info-card"><div className="lbl">布林带</div>
+          <div className="val">
+            {indicators?.boll?.mid ? `${indicators.boll.mid.toFixed(0)}` : '--'}
           </div>
         </div>
       </div>
