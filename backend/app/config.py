@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     diagnosis_llm_provider: str = "deepseek"
     diagnosis_llm_model: str = "deepseek-v4-pro"
     diagnosis_llm_api_key: str = ""
-    diagnosis_llm_base_url: str = "https://api.deepseek.com/v1"
+    diagnosis_llm_base_url: str = "https://api.deepseek.com"
     diagnosis_max_tool_rounds: int = 5
 
     class Config:
