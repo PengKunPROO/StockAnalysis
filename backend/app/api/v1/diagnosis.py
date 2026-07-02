@@ -98,7 +98,7 @@ async def chat(req: ChatRequest):
         try:
             env = {**os.environ, "NO_COLOR": "1"}
             proc = subprocess.Popen(
-                ["hermes", "chat", "-q", prompt, "-s", "stock-analysis"],
+                ["hermes", "chat", "-q", prompt],
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                 env=env, text=True, encoding="utf-8", errors="replace",
             )
