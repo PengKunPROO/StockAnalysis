@@ -58,3 +58,33 @@ class SyncLog(Base):
     started_at = Column(DateTime)
     finished_at = Column(DateTime)
     error_msg = Column(Text)
+
+
+from sqlalchemy import ForeignKey
+
+
+class DiagnosisSession(Base):
+    __tablename__ = "diagnosis_sessions"
+    id = Column(String(36), primary_key=True)
+    skill_name = Column(String(100), nullable=False)
+    model = Column(String(100), nullable=False)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class SessionStock(Base):
+    __tablename__ = "session_stocks"
+    session_id = Column(String(36), ForeignKey("diagnosis_sessions.id"), primary_key=True)
+    stock_code = Column(String(20), primary_key=True)
+    stock_name = Column(String(100), nullable=False)
+
+
+class DiagnosisMessage(Base):
+    __tablename__ = "diagnosis_messages"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    session_id = Column(String(36), ForeignKey("diagnosis_sessions.id"), nullable=False)
+    role = Column(String(20), nullable=False)
+    content = Column(Text)
+    tool_calls = Column(Text)
+    tool_call_id = Column(String(100))
+    created_at = Column(DateTime, server_default=func.now())
