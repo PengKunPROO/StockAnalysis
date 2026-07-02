@@ -1,8 +1,29 @@
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-import asyncio, json, os, uuid, subprocess
+import asyncio, json, os, uuid, subprocess, re
 from concurrent.futures import ThreadPoolExecutor
+
+# Filter Hermes output: strip ANSI, remove boilerplate
+ANSI_RE = re.compile(r'\x1b\[[0-9;]*m')
+def _filter_line(line: str) -> str | None:
+    """Clean Hermes output: strip ANSI, skip boilerplate. Returns filtered line or None to skip."""
+    clean = ANSI_RE.sub('', line)
+    for pat in SKIP_PATTERNS:
+        if re.match(pat, clean):
+            return None
+    return clean
+
+
+SKIP_PATTERNS = [
+    r'^Query:',
+    r'^Initializing agent',
+    r'^[─╭╰═╮╯]+',
+    r'^Resume this session',
+    r'^Session:',
+    r'^Duration:',
+    r'^Messages:',
+]
 from app.diagnosis.sessions import (
     create_session, add_stock_to_session, get_session_stocks,
     get_messages, list_sessions, save_message,
@@ -84,8 +105,10 @@ async def chat(req: ChatRequest):
 
             full_output = ""
             for line in proc.stdout:
-                full_output += line
-                yield f"data: {json.dumps({'content': line}, ensure_ascii=False)}\n\n"
+                filtered = _filter_line(line)
+                if filtered is not None:
+                    full_output += filtered
+                    yield f"data: {json.dumps({'content': filtered}, ensure_ascii=False)}\n\n"
 
             proc.wait()
 
