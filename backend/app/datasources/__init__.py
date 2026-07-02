@@ -1,6 +1,7 @@
 """Datasource plugin auto-discovery and registry."""
 from app.datasources.akshare import AShareSource
 from app.datasources.yfinance import USStockSource
+from app.datasources.sample import SampleSource
 
 _registry: dict[str, object] = {}
 _built: bool = False
@@ -10,6 +11,7 @@ def _build_registry():
     global _registry, _built
     if _built:
         return
+    _registry["sample"] = SampleSource()
     _registry["akshare"] = AShareSource()
     _registry["yfinance"] = USStockSource()
     _built = True
