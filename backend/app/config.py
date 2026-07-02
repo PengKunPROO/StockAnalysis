@@ -2,7 +2,7 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    database_url: str = "postgresql+asyncpg://stockapp:stockapp_dev@localhost:5432/stockdb"
+    database_url: str = "sqlite+aiosqlite:///./stock.db"
     log_level: str = "INFO"
 
     class Config:
