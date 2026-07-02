@@ -11,6 +11,7 @@ def _build_registry():
     global _registry, _built
     if _built:
         return
+    # Order matters: first registered = primary for market
     _registry["tonghuashun"] = TonghuashunSource()
     _registry["yfinance"] = USStockSource()
     _registry["sample"] = SampleSource()

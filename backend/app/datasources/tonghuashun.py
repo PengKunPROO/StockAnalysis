@@ -1,12 +1,22 @@
 """Tonghuashun (同花顺) Financial-API datasource."""
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timezone, timedelta
 import httpx
 from app.config import settings
 from app.datasources.base import (
     DataSourceProtocol, KlineBar, RealtimeQuote, StockInfo, FinancialReport,
 )
 
-BASE_URL = "https://fuyao.aicubes.cn/api"
+BASE_URL = "https://fuyao.aicubes.cn"
+
+
+def _ms_to_date(ms: int) -> str:
+    dt = datetime.fromtimestamp(ms / 1000, tz=timezone(timedelta(hours=8)))
+    return dt.date().isoformat()
+
+
+def _date_to_ms(d: str) -> int:
+    dt = datetime.strptime(d, "%Y-%m-%d").replace(tzinfo=timezone(timedelta(hours=8)))
+    return int(dt.timestamp() * 1000)
 
 
 class TonghuashunSource:
@@ -44,31 +54,29 @@ class TonghuashunSource:
             resp.raise_for_status()
             data = resp.json()
             if data.get("code") != 0:
-                raise Exception(f"API error: {data.get('message', 'unknown')}")
+                raise Exception(f"API error {data.get('code')}: {data.get('message', 'unknown')}")
             return data.get("data", {})
 
     def _to_our_code(self, thscode: str) -> str:
-        """Convert 600519.SH → sh.600519"""
         parts = thscode.split(".")
         market = "sh" if parts[1] == "SH" else "sz"
         return f"{market}.{parts[0]}"
 
     def _to_ths_code(self, our_code: str) -> str:
-        """Convert sh.600519 → 600519.SH"""
         parts = our_code.split(".")
         market = "SH" if parts[0] == "sh" else "SZ"
         return f"{parts[1]}.{market}"
 
     async def search_stocks(self, keyword: str) -> list[StockInfo]:
         try:
-            data = await self._get("/a-share/tickers/search", {"q": keyword, "limit": 20})
-            items = data.get("items", [])
+            data = await self._get("/api/meta/tickers/search", {"q": keyword, "limit": 20})
+            items = data.get("item", [])
             return [
                 StockInfo(
                     code=self._to_our_code(item["thscode"]),
                     name=item.get("name", ""),
                     market="a_share",
-                    industry=item.get("industry", ""),
+                    industry="",
                 )
                 for item in items
             ]
@@ -81,29 +89,27 @@ class TonghuashunSource:
     ) -> list[KlineBar]:
         if end is None:
             end = date.today().isoformat()
-
         try:
             ths = self._to_ths_code(code)
-            freq_map = {"daily": "1d", "weekly": "1w", "monthly": "1m"}
-            data = await self._get("/a-share/prices/historical", {
+            interval_map = {"daily": "1d", "weekly": "1w", "monthly": "1m"}
+            data = await self._get("/api/a-share/prices/historical", {
                 "thscode": ths,
-                "freq": freq_map.get(period, "1d"),
-                "start_date": start,
-                "end_date": end,
-                "adjust": "qfq",
+                "interval": interval_map.get(period, "1d"),
+                "start": _date_to_ms(start),
+                "end": _date_to_ms(end),
             })
-            bars = data.get("bars", [])
+            items = data.get("item", [])
             return [
                 KlineBar(
-                    date=b["date"],
-                    open=float(b["open"]),
-                    high=float(b["high"]),
-                    low=float(b["low"]),
-                    close=float(b["close"]),
-                    volume=int(b.get("volume", 0)),
-                    amount=float(b.get("amount", 0)),
+                    date=_ms_to_date(int(b["date_ms"])),
+                    open=float(b["open_price"]),
+                    high=float(b["high_price"]),
+                    low=float(b["low_price"]),
+                    close=float(b["close_price"]),
+                    volume=int(float(b.get("volume", 0))),
+                    amount=float(b.get("turnover", 0)),
                 )
-                for b in bars
+                for b in items
             ]
         except Exception:
             return []
@@ -111,20 +117,19 @@ class TonghuashunSource:
     async def fetch_realtime(self, code: str) -> RealtimeQuote | None:
         try:
             ths = self._to_ths_code(code)
-            data = await self._get("/a-share/prices/snapshot", {"thscodes": ths})
-            items = data.get("items", [])
+            data = await self._get("/api/a-share/prices/snapshot", {"thscodes": ths})
+            items = data.get("item", [])
             if not items:
                 return None
             item = items[0]
-            change_pct = float(item.get("change_pct", 0) or 0)
             return RealtimeQuote(
                 code=code,
-                name=item.get("name", code),
-                price=float(item.get("latest", 0)),
-                change_pct=round(change_pct, 2),
-                volume=int(item.get("volume", 0) or 0),
-                high=float(item.get("high", 0) or 0),
-                low=float(item.get("low", 0) or 0),
+                name=item.get("thscode", code),
+                price=float(item.get("last_price", 0)),
+                change_pct=round(float(item.get("price_change_ratio_pct", 0) or 0), 2),
+                volume=int(float(item.get("volume", 0))),
+                high=float(item.get("high_price", 0) or 0),
+                low=float(item.get("low_price", 0) or 0),
                 timestamp=datetime.now().isoformat(),
             )
         except Exception:
@@ -133,33 +138,52 @@ class TonghuashunSource:
     async def fetch_financials(self, code: str) -> FinancialReport | None:
         try:
             ths = self._to_ths_code(code)
-            data = await self._get("/a-share/financials/indicators", {
-                "thscode": ths,
-                "limit": 1,
-            })
-            items = data.get("items", [])
-            if not items:
-                return None
-            item = items[0]
+            today = date.today()
+            year = today.year
+            quarter = (today.month - 1) // 3 + 1
+            # Try latest quarter, fall back to previous
+            for q in range(quarter, 0, -1):
+                try:
+                    data = await self._get("/api/a-share/financials/indicators", {
+                        "thscode": ths,
+                        "report": f"{year}-{q}",
+                        "limit": 1,
+                    })
+                    break
+                except Exception:
+                    if q == 1:
+                        # Try previous year Q4
+                        data = await self._get("/api/a-share/financials/indicators", {
+                            "thscode": ths,
+                            "report": f"{year - 1}-4",
+                            "limit": 1,
+                        })
+                    continue
+
+            # Extract indicators from nested abilities structure
+            indicators = {}
+            for ability in data.get("abilities", []):
+                for ind in ability.get("indicators", []):
+                    indicators[ind["index_id"]] = ind.get("value")
+
             return FinancialReport(
                 code=code,
-                report_date=item.get("report_date", ""),
-                revenue=_safe_float(item.get("revenue")),
-                net_profit=_safe_float(item.get("net_profit")),
-                pe_ratio=_safe_float(item.get("pe_ttm")),
-                pb_ratio=_safe_float(item.get("pb")),
-                roe=_safe_float(item.get("roe")),
-                debt_ratio=_safe_float(item.get("debt_to_assets")),
-                total_assets=_safe_float(item.get("total_assets")),
-                total_equity=_safe_float(item.get("total_equity")),
+                report_date=data.get("report", ""),
+                revenue=None,  # not in indicators API
+                net_profit=None,
+                pe_ratio=None,  # not in indicators API
+                pb_ratio=None,
+                roe=_safe_float(indicators.get("index_weighted_avg_roe")),
+                debt_ratio=_safe_float(indicators.get("assets_debt_ratio")),
+                total_assets=None,
+                total_equity=None,
             )
         except Exception:
             return None
 
     async def fetch_index(self, code: str) -> RealtimeQuote | None:
         try:
-            ths = self._to_ths_code(code)
-            return await self.fetch_realtime(code) if ths else None
+            return await self.fetch_realtime(code)
         except Exception:
             return None
 
