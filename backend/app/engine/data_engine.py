@@ -155,7 +155,7 @@ class DataEngine:
             "status": "ok" if healthy and db_status == "connected" else "degraded",
             "datasources": {
                 name: "healthy" if name in healthy else "unhealthy"
-                for name in ["akshare", "yfinance"]
+                for name in get_sources()
             },
             "database": db_status,
         }
