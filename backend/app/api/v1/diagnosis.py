@@ -88,12 +88,23 @@ async def chat(req: ChatRequest):
                 yield f"data: {json.dumps({'content': text}, ensure_ascii=False)}\n\n"
 
             await proc.wait()
+
+            # Check for errors
+            if proc.returncode != 0:
+                stderr_text = (await proc.stderr.read()).decode("utf-8", errors="replace")
+                err = stderr_text.strip() or f"Hermes exited with code {proc.returncode}"
+                yield f"data: {json.dumps({'content': f'Agent Error: {err}', 'done': True}, ensure_ascii=False)}\n\n"
+                return
+
             await save_message(sid, "user", content=req.message)
             await save_message(sid, "assistant", content=full_output.strip())
             yield f"data: {json.dumps({'done': True}, ensure_ascii=False)}\n\n"
 
         except Exception as e:
-            yield f"data: {json.dumps({'content': f'Error: {e}', 'done': True}, ensure_ascii=False)}\n\n"
+            import traceback
+            tb = traceback.format_exc()
+            msg = f"Error: {e}\n{tb[-300:]}"
+            yield f"data: {json.dumps({'content': msg, 'done': True}, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
