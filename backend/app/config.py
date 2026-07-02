@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     diagnosis_llm_api_key: str = ""
     diagnosis_llm_base_url: str = "https://api.deepseek.com"
     diagnosis_max_tool_rounds: int = 5
+    fuyao_api_key: str = ""
 
     class Config:
         env_file = ".env"
