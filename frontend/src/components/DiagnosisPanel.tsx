@@ -28,7 +28,6 @@ export default function DiagnosisPanel() {
     await chatStream({
       session_id: sessionId || undefined,
       skill,
-      model: 'deepseek-v4-pro',
       message: userMsg,
       stock_codes: state.currentStock ? [{ code: state.currentStock.code, name: state.currentStock.name }] : [],
     }, {

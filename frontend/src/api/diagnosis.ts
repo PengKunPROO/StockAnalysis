@@ -1,10 +1,8 @@
 interface ChatParams {
   session_id?: string
   skill: string
-  model: string
   message: string
   stock_codes: { code: string; name: string }[]
-  api_key?: string
 }
 
 interface ChatEvents {
