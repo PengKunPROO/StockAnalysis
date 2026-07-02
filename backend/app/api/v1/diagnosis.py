@@ -1,7 +1,8 @@
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-import asyncio, json, os, uuid
+import asyncio, json, os, uuid, subprocess
+from concurrent.futures import ThreadPoolExecutor
 from app.diagnosis.sessions import (
     create_session, add_stock_to_session, get_session_stocks,
     get_messages, list_sessions, save_message,
@@ -74,25 +75,23 @@ async def chat(req: ChatRequest):
         yield f'data: {{"session_id": "{sid}"}}\n\n'
 
         try:
-            proc = await asyncio.create_subprocess_exec(
-                "hermes", "chat", "-q", prompt, "-s", "stock-analysis",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                env={**os.environ, "NO_COLOR": "1"},
+            env = {**os.environ, "NO_COLOR": "1"}
+            proc = subprocess.Popen(
+                ["hermes", "chat", "-q", prompt, "-s", "stock-analysis"],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                env=env, text=True, encoding="utf-8", errors="replace",
             )
 
             full_output = ""
-            async for line in proc.stdout:
-                text = line.decode("utf-8", errors="replace")
-                full_output += text
-                yield f"data: {json.dumps({'content': text}, ensure_ascii=False)}\n\n"
+            for line in proc.stdout:
+                full_output += line
+                yield f"data: {json.dumps({'content': line}, ensure_ascii=False)}\n\n"
 
-            await proc.wait()
+            proc.wait()
 
-            # Check for errors
             if proc.returncode != 0:
-                stderr_text = (await proc.stderr.read()).decode("utf-8", errors="replace")
-                err = stderr_text.strip() or f"Hermes exited with code {proc.returncode}"
+                stderr_text = proc.stderr.read().strip()
+                err = stderr_text or f"Hermes exited with code {proc.returncode}"
                 yield f"data: {json.dumps({'content': f'Agent Error: {err}', 'done': True}, ensure_ascii=False)}\n\n"
                 return
 
