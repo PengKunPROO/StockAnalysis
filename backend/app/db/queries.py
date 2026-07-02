@@ -28,6 +28,13 @@ async def upsert_daily_klines(session, code: str, bars: list[dict]):
 
 
 async def upsert_financials(session, code: str, report: dict):
+    # Convert "2026-3" → date(2026, 9, 30)
+    rd = report.get("report_date", "")
+    if "-" in str(rd):
+        parts = str(rd).split("-")
+        y, q = int(parts[0]), int(parts[1])
+        month = q * 3
+        report["report_date"] = date(y, month, 1)
     stmt = sqlite_insert(Financial).values(code=code, **report).on_conflict_do_update(
         index_elements=["code", "report_date"],
         set_={k: v for k, v in report.items() if k != "report_date"},
