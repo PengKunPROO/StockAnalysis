@@ -2,7 +2,7 @@
 import logging
 from app.db.database import get_session_factory
 from app.db import queries
-from app.datasources import get_source_for_market, get_healthy_sources
+from app.datasources import get_source_for_market, get_healthy_sources, get_sources
 
 logger = logging.getLogger(__name__)
 
