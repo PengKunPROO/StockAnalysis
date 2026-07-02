@@ -1,25 +1,36 @@
 @echo off
-echo === Stock Agent 启动中 ===
+cd /d "%~dp0"
+echo === Stock Agent ===
 
-:: SSH agent (for git push)
-ssh-agent -s > NUL 2>&1
-ssh-add %USERPROFILE%\.ssh\id_ed25519 > NUL 2>&1
+:: Git SSH
+echo [SSH] Starting agent...
+"C:\Program Files\Git\usr\bin\ssh-agent.exe" -s > "%TEMP%\ssh-agent.env" 2>NUL
+for /f "tokens=*" %%i in ('type "%TEMP%\ssh-agent.env" ^| findstr SSH_AUTH_SOCK') do set %%i
+for /f "tokens=*" %%i in ('type "%TEMP%\ssh-agent.env" ^| findstr SSH_AGENT_PID') do set %%i
+"C:\Program Files\Git\usr\bin\ssh-add.exe" "%USERPROFILE%\.ssh\id_ed25519" 2>NUL
 
-:: 后端
-echo [1/2] 启动后端...
-start "StockAgent-Backend" cmd /c "cd /d %~dp0backend && .venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload"
+:: Backend
+echo [1/2] Starting backend...
+start "StockAgent-BE" cmd /c "cd /d %~dp0backend && .venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload"
 
-:: 等待后端就绪
-echo 等待后端启动...
-timeout /t 4 /nobreak > NUL
+:: Wait for backend
+echo Waiting for backend...
+set /a count=0
+:wait_be
+timeout /t 2 /nobreak >NUL
+set /a count+=2
+curl -s http://127.0.0.1:8000/api/v1/health >NUL 2>&1
+if %errorlevel% neq 0 if %count% lss 40 goto wait_be
+if %count% geq 40 echo WARNING: Backend may not be ready
 
-:: 前端
-echo [2/2] 启动前端...
-start "StockAgent-Frontend" cmd /c "cd /d %~dp0frontend && npm run dev"
+:: Frontend  
+echo [2/2] Starting frontend...
+start "StockAgent-FE" cmd /c "cd /d %~dp0frontend && npm run dev"
 
+timeout /t 3 /nobreak >NUL
 echo.
-echo === 启动完成 ===
-echo 后端: http://localhost:8000/docs
-echo 前端: http://localhost:5173
+echo === Ready ===
+echo Backend : http://localhost:8000/docs
+echo Frontend: http://localhost:5173
 echo.
 pause
