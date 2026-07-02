@@ -82,8 +82,7 @@ async def run_chat(session_id: str, user_message: str) -> AsyncGenerator[str, No
 
 
 async def _call_llm(messages: list[dict], model: str) -> dict:
-    import os
-    api_key = settings.diagnosis_llm_api_key or os.environ.get("DEEPSEEK_API_KEY", "")
+    api_key = settings.diagnosis_llm_api_key
     base_url = settings.diagnosis_llm_base_url
 
     async with httpx.AsyncClient(timeout=60) as client:
