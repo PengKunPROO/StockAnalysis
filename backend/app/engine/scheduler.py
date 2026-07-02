@@ -59,5 +59,28 @@ def start_scheduler():
         id="daily_kline_sync",
         replace_existing=True,
     )
+    scheduler.add_job(
+        cleanup_old_data,
+        "cron", hour=3, minute=0,
+        id="data_cleanup",
+        replace_existing=True,
+    )
     scheduler.start()
     logger.info("Background scheduler started")
+
+
+async def cleanup_old_data():
+    """Remove kline data older than 1 year to save space."""
+    factory = get_session_factory()
+    async with factory() as session:
+        from sqlalchemy import delete
+        from datetime import date, timedelta
+        cutoff = date.today() - timedelta(days=365)
+        from app.db.models import DailyKline
+        result = await session.execute(
+            delete(DailyKline).where(DailyKline.trade_date < cutoff)
+        )
+        deleted = result.rowcount
+        await session.commit()
+        if deleted:
+            logger.info(f"Cleaned up {deleted} old kline records (before {cutoff})")
