@@ -6,6 +6,7 @@ interface AppState {
   skills: SkillMeta[]
   sessions: DiagnosisSession[]
   watchlist: WatchlistItem[]
+  skillManagerOpen: boolean
 }
 
 const initialState: AppState = {
@@ -13,6 +14,7 @@ const initialState: AppState = {
   skills: [],
   sessions: [],
   watchlist: [],
+  skillManagerOpen: false,
 }
 
 type Action =
@@ -20,6 +22,7 @@ type Action =
   | { type: 'SET_SKILLS'; skills: SkillMeta[] }
   | { type: 'SET_SESSIONS'; sessions: DiagnosisSession[] }
   | { type: 'SET_WATCHLIST'; watchlist: WatchlistItem[] }
+  | { type: 'TOGGLE_SKILL_MANAGER'; open?: boolean }
 
 function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
@@ -27,6 +30,7 @@ function reducer(state: AppState, action: Action): AppState {
     case 'SET_SKILLS': return { ...state, skills: action.skills }
     case 'SET_SESSIONS': return { ...state, sessions: action.sessions }
     case 'SET_WATCHLIST': return { ...state, watchlist: action.watchlist }
+    case 'TOGGLE_SKILL_MANAGER': return { ...state, skillManagerOpen: action.open ?? !state.skillManagerOpen }
     default: return state
   }
 }

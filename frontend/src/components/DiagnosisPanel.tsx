@@ -5,7 +5,7 @@ import ChatMessage from './ChatMessage'
 import type { ChatMessage as ChatMsg } from '../types'
 
 export default function DiagnosisPanel() {
-  const { state } = useApp()
+  const { state, dispatch } = useApp()
   const [messages, setMessages] = useState<ChatMsg[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -65,6 +65,9 @@ export default function DiagnosisPanel() {
             : <option value="默认分析">默认分析</option>
           }
         </select>
+        <button onClick={() => dispatch({ type: 'TOGGLE_SKILL_MANAGER' })}
+          style={{ background: 'none', border: 'none', color: '#999', cursor: 'pointer', fontSize: 16 }}
+          title="管理Skill">⚙</button>
         <span style={{ color: '#666', fontSize: 12 }}>
           {state.currentStock?.name || '选择股票'}
         </span>
