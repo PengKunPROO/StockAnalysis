@@ -1,5 +1,7 @@
-import React, { createContext, useContext, useReducer } from 'react'
+import React, { createContext, useContext, useReducer, useEffect } from 'react'
 import type { StockInfo, SkillMeta, DiagnosisSession, WatchlistItem } from '../types'
+
+const STORAGE_KEY = 'stockagent_state'
 
 interface AppState {
   currentStock: StockInfo | null
@@ -9,11 +11,28 @@ interface AppState {
   skillManagerOpen: boolean
 }
 
+function loadState(): Partial<AppState> {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (raw) return JSON.parse(raw)
+  } catch {}
+  return {}
+}
+
+function saveState(state: AppState) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      currentStock: state.currentStock,
+      watchlist: state.watchlist,
+    }))
+  } catch {}
+}
+
 const initialState: AppState = {
-  currentStock: null,
+  currentStock: loadState().currentStock || null,
   skills: [],
   sessions: [],
-  watchlist: [],
+  watchlist: loadState().watchlist || [],
   skillManagerOpen: false,
 }
 
@@ -39,6 +58,10 @@ const AppCtx = createContext<{ state: AppState; dispatch: React.Dispatch<Action>
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState)
+
+  // Persist on changes
+  useEffect(() => { saveState(state) }, [state.currentStock, state.watchlist])
+
   return <AppCtx.Provider value={{ state, dispatch }}>{children}</AppCtx.Provider>
 }
 

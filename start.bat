@@ -11,7 +11,7 @@ for /f "tokens=*" %%i in ('type "%TEMP%\ssh-agent.env" ^| findstr SSH_AGENT_PID'
 
 :: Backend
 echo [1/2] Starting backend...
-start "StockAgent-BE" cmd /c "cd /d %~dp0backend && .venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload"
+start "StockAgent-BE" cmd /c "cd /d %~dp0backend && .venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8001 --reload"
 
 :: Wait for backend
 echo Waiting for backend...
@@ -19,7 +19,7 @@ set /a count=0
 :wait_be
 timeout /t 2 /nobreak >NUL
 set /a count+=2
-curl -s http://127.0.0.1:8000/api/v1/health >NUL 2>&1
+curl -s http://127.0.0.1:8001/api/v1/health >NUL 2>&1
 if %errorlevel% neq 0 if %count% lss 40 goto wait_be
 if %count% geq 40 echo WARNING: Backend may not be ready
 
