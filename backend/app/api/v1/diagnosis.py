@@ -16,6 +16,7 @@ class ChatRequest(BaseModel):
     model: str = "deepseek-v4-pro"
     message: str
     stock_codes: list[dict] | None = None
+    api_key: str = ""
 
 
 @router.post("/chat")
@@ -28,8 +29,8 @@ async def chat(req: ChatRequest):
             await add_stock_to_session(sid, s["code"], s["name"])
 
     async def event_stream():
-        yield f"data: {{\"session_id\": \"{sid}\"}}\n\n"
-        async for chunk in run_chat(sid, req.message):
+        yield f'data: {{"session_id": "{sid}"}}\n\n'
+        async for chunk in run_chat(sid, req.message, req.api_key, req.model):
             yield chunk
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")

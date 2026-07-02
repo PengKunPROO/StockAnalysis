@@ -11,7 +11,8 @@ from app.diagnosis.sessions import get_session_stocks, get_messages, save_messag
 logger = logging.getLogger(__name__)
 
 
-async def run_chat(session_id: str, user_message: str) -> AsyncGenerator[str, None]:
+async def run_chat(session_id: str, user_message: str, api_key: str = "",
+                   model_override: str = "") -> AsyncGenerator[str, None]:
     stocks = await get_session_stocks(session_id)
     messages = await get_messages(session_id)
 
@@ -50,14 +51,14 @@ async def run_chat(session_id: str, user_message: str) -> AsyncGenerator[str, No
     await save_message(session_id, "user", content=user_message)
 
     max_rounds = settings.diagnosis_max_tool_rounds
-    full_content = ""
+    model = model_override or ds.model
 
     for round_num in range(max_rounds + 1):
         if round_num >= max_rounds:
             yield f"data: {json.dumps({'error': '达到最大工具调用轮次，请简化问题'}, ensure_ascii=False)}\n\n"
             return
 
-        response = await _call_llm(llm_messages, ds.model)
+        response = await _call_llm(llm_messages, model, api_key)
         message = response.get("choices", [{}])[0].get("message", {})
 
         if message.get("tool_calls"):
@@ -75,21 +76,20 @@ async def run_chat(session_id: str, user_message: str) -> AsyncGenerator[str, No
                 })
         else:
             content = message.get("content", "")
-            full_content = content
             await save_message(session_id, "assistant", content=content)
             yield f"data: {json.dumps({'content': content, 'done': True}, ensure_ascii=False)}\n\n"
             return
 
 
-async def _call_llm(messages: list[dict], model: str) -> dict:
-    api_key = settings.diagnosis_llm_api_key
+async def _call_llm(messages: list[dict], model: str, api_key: str = "") -> dict:
+    key = api_key or settings.diagnosis_llm_api_key
     base_url = settings.diagnosis_llm_base_url
 
     async with httpx.AsyncClient(timeout=60) as client:
         resp = await client.post(
             f"{base_url}/chat/completions",
             headers={
-                "Authorization": f"Bearer {api_key}",
+                "Authorization": f"Bearer {key}",
                 "Content-Type": "application/json",
             },
             json={
