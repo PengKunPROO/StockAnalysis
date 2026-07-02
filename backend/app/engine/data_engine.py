@@ -1,5 +1,6 @@
 """Data Engine: cache-first fetch orchestration."""
 import logging
+from datetime import date
 from app.db.database import get_session_factory
 from app.db import queries
 from app.datasources import get_source_for_market, get_healthy_sources, get_sources
@@ -31,7 +32,7 @@ class DataEngine:
 
                 bar_dicts = [
                     {
-                        "trade_date": b.date,
+                        "trade_date": date.fromisoformat(b.date),
                         "open": b.open, "high": b.high, "low": b.low,
                         "close": b.close, "volume": b.volume, "amount": b.amount,
                     }

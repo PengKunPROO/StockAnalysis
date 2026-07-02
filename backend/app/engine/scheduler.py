@@ -37,7 +37,7 @@ async def sync_all_daily_klines():
             if bars:
                 bar_dicts = [
                     {
-                        "trade_date": b.date,
+                        "trade_date": date.fromisoformat(b.date),
                         "open": b.open, "high": b.high, "low": b.low,
                         "close": b.close, "volume": b.volume, "amount": b.amount,
                     }
