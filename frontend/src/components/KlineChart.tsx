@@ -60,8 +60,8 @@ export default function KlineChart() {
   }, [state.currentStock])
 
   return (
-    <div style={{ background: '#1a1a2e', borderRadius: 8, overflow: 'hidden' }}>
-      <div ref={containerRef} style={{ width: '100%', height: 420 }} />
+    <div className="kline-container">
+      <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
     </div>
   )
 }
