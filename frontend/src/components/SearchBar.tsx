@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Input } from '@/components/ui/input'
+import { Input } from '../components/ui/input'
 import { searchStocks } from '../api/stocks'
 import { useApp } from '../contexts/AppContext'
 import { addToWatchlist } from '../api/watchlist'

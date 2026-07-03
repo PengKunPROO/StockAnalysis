@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Card } from '@/components/ui/card'
+import { Card } from '../components/ui/card'
 import { useApp } from '../contexts/AppContext'
 import { getRealtime, getFinancial, getIndicators } from '../api/stocks'
 import type { IndicatorPoint } from '../types'

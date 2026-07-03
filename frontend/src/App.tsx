@@ -7,9 +7,9 @@ import KlineChart from './components/KlineChart'
 import InfoCards from './components/InfoCards'
 import DiagnosisPanel from './components/DiagnosisPanel'
 import SkillManager from './components/SkillManager'
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
-import { Button } from "@/components/ui/button"
-import { Separator } from "@/components/ui/separator"
+import { Sheet, SheetContent, SheetTrigger } from "./components/ui/sheet"
+import { Button } from "./components/ui/button"
+import { Separator } from "./components/ui/separator"
 import { Menu, Settings } from 'lucide-react'
 
 function Sidebar() {
