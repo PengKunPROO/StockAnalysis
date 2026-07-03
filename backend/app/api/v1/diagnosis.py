@@ -54,6 +54,7 @@ async def chat(req: ChatRequest):
 
     # Agent mode: give Hermes curl instructions instead of pre-fetching all data
     stock_list = ", ".join(f"{s['name']}({s['code']})" for s in stocks)
+    skill_content = get_skill_content(req.skill) or ""
 
     prompt = f"""{skill_content}
 

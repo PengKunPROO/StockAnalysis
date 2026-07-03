@@ -122,14 +122,20 @@ class TonghuashunSource:
             if not items:
                 return None
             item = items[0]
+            prev = item.get("prev_price")
+            price = item.get("last_price")
+            if price is None:
+                price = prev  # fallback to previous close when market is closed
+            if price is None:
+                price = 0
             return RealtimeQuote(
                 code=code,
                 name=item.get("thscode", code),
-                price=float(item.get("last_price", 0)),
-                change_pct=round(float(item.get("price_change_ratio_pct", 0) or 0), 2),
-                volume=int(float(item.get("volume", 0))),
-                high=float(item.get("high_price", 0) or 0),
-                low=float(item.get("low_price", 0) or 0),
+                price=float(price),
+                change_pct=round(float(item.get("price_change_ratio_pct") or 0), 2),
+                volume=int(float(item.get("volume") or 0)),
+                high=float(item.get("high_price") or item.get("prev_price") or 0),
+                low=float(item.get("low_price") or item.get("prev_price") or 0),
                 timestamp=datetime.now().isoformat(),
             )
         except Exception:
