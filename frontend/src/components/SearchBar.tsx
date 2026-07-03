@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect } from 'react'
-import { Input } from '../components/ui/input'
 import { searchStocks } from '../api/stocks'
 import { useApp } from '../contexts/AppContext'
 import { addToWatchlist } from '../api/watchlist'
@@ -13,42 +12,30 @@ export default function SearchBar() {
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
+    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
+    document.addEventListener('mousedown', h); return () => document.removeEventListener('mousedown', h)
   }, [])
 
-  const handleInput = async (val: string) => {
-    setQuery(val)
-    if (val.length >= 1) {
-      try { const data = await searchStocks(val); setResults(data.results); setOpen(true) } catch { setOpen(false) }
-    } else { setOpen(false) }
+  const handle = async (v: string) => {
+    setQuery(v)
+    if (v.length >= 1) { try { setResults((await searchStocks(v)).results); setOpen(true) } catch { setOpen(false) } }
+    else setOpen(false)
   }
 
   const select = async (s: StockInfo) => {
-    dispatch({ type: 'SET_STOCK', stock: s })
-    setQuery(s.name)
-    setOpen(false)
+    dispatch({ type: 'SET_STOCK', stock: s }); setQuery(s.name); setOpen(false)
     if (!state.watchlist.find(w => w.code === s.code)) {
-      try {
-        await addToWatchlist(s.code, s.name)
-        const { getWatchlist } = await import('../api/watchlist')
-        dispatch({ type: 'SET_WATCHLIST', watchlist: (await getWatchlist()).stocks })
-      } catch {}
+      await addToWatchlist(s.code, s.name)
+      dispatch({ type: 'SET_WATCHLIST', watchlist: (await (await import('../api/watchlist')).getWatchlist()).stocks })
     }
   }
 
   return (
-    <div ref={ref} className="flex-1 max-w-[480px] relative">
-      <Input value={query} onChange={e => handleInput(e.target.value)} placeholder="搜索股票代码或名称..." className="w-full" />
+    <div ref={ref} className="search-wrap">
+      <input value={query} onChange={e => handle(e.target.value)} placeholder="搜索股票代码或名称..." />
       {open && results.length > 0 && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-surface border border-border rounded-lg shadow-lg z-50 max-h-[300px] overflow-y-auto">
-          {results.map(s => (
-            <div key={s.code} onClick={() => select(s)} className="px-4 py-2.5 cursor-pointer hover:bg-gray-50 border-b border-border flex justify-between items-center transition-colors">
-              <span className="font-medium text-sm">{s.name}</span>
-              <span className="text-xs text-muted">{s.code}</span>
-            </div>
-          ))}
+        <div className="search-dropdown">
+          {results.map(s => <div key={s.code} className="item" onClick={() => select(s)}><span>{s.name}</span><span className="code">{s.code}</span></div>)}
         </div>
       )}
     </div>

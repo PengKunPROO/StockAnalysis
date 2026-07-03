@@ -15,17 +15,17 @@ export default function KlineChart() {
     if (!state.currentStock || !containerRef.current) return
 
     const chart = createChart(containerRef.current, {
-      layout: { background: { type: ColorType.Solid, color: '#1a1a2e' }, textColor: '#d1d4dc' },
-      grid: { vertLines: { color: '#2a2a3e' }, horzLines: { color: '#2a2a3e' } },
+      layout: { background: { type: ColorType.Solid, color: '#0a0a20' }, textColor: '#c8c8e0' },
+      grid: { vertLines: { color: '#1a1a3a' }, horzLines: { color: '#1a1a3a' } },
       crosshair: { mode: CrosshairMode.Normal },
-      rightPriceScale: { borderColor: '#2a2a3e' },
-      timeScale: { borderColor: '#2a2a3e', timeVisible: true },
+      rightPriceScale: { borderColor: '#1a1a3a' },
+      timeScale: { borderColor: '#1a1a3a', timeVisible: true },
     })
     chartRef.current = chart
 
     const candleSeries = chart.addSeries(CandlestickSeries, {
-      upColor: '#26a69a', downColor: '#ef5350', borderUpColor: '#26a69a', borderDownColor: '#ef5350',
-      wickUpColor: '#26a69a', wickDownColor: '#ef5350',
+      upColor: '#00e5ff', downColor: '#ff3366', borderUpColor: '#00e5ff', borderDownColor: '#ff3366',
+      wickUpColor: '#00e5ff', wickDownColor: '#ff3366',
     })
     candleSeriesRef.current = candleSeries
 
