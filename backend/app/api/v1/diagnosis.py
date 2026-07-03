@@ -23,6 +23,10 @@ SKIP_PATTERNS = [
     r'^Session:',
     r'^Duration:',
     r'^Messages:',
+    r'^name:',
+    r'^description:',
+    r'^mode:',
+    r'^---',
 ]
 from app.diagnosis.sessions import (
     create_session, add_stock_to_session, get_session_stocks,
