@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Card } from '@/components/ui/card'
 import { useApp } from '../contexts/AppContext'
 import { getRealtime, getFinancial, getIndicators } from '../api/stocks'
 import type { IndicatorPoint } from '../types'
@@ -21,41 +22,34 @@ export default function InfoCards() {
 
   const pct = realtime?.change_pct ?? 0
   const up = pct >= 0
+  const cards = [
+    { label: '最新价', value: realtime?.price?.toFixed(2) || '--', color: up ? 'text-up' : 'text-down' },
+    { label: '涨跌幅', value: `${pct > 0 ? '+' : ''}${pct.toFixed(2)}%`, color: up ? 'text-up' : 'text-down' },
+    { label: '成交量', value: realtime?.volume ? `${(realtime.volume / 10000).toFixed(0)}万` : '--' },
+    { label: 'ROE', value: financial?.roe != null ? `${financial.roe.toFixed(1)}%` : '--' },
+    { label: '负债率', value: financial?.debt_ratio != null ? `${financial.debt_ratio.toFixed(1)}%` : '--' },
+    { label: 'MACD', value: indicators?.macd ? `${indicators.macd.macd > 0 ? '金叉' : '死叉'} ${indicators.macd.macd.toFixed(1)}` : '--', color: (indicators?.macd?.macd ?? 0) > 0 ? 'text-up' : 'text-down' },
+    { label: 'RSI(14)', value: indicators?.rsi?.rsi14?.toFixed(0) || '--', color: (indicators?.rsi?.rsi14 ?? 50) > 70 ? 'text-down' : (indicators?.rsi?.rsi14 ?? 50) < 30 ? 'text-up' : '' },
+    { label: 'KDJ', value: indicators?.kdj?.k != null ? `K${indicators.kdj.k.toFixed(0)} D${indicators.kdj.d.toFixed(0)}` : '--' },
+  ]
 
   return (
     <div>
-      <div className="price-header">
-        <span style={{ color: '#888', fontSize: 14 }}>{stock.name}</span>
-        <span style={{ color: '#555', fontSize: 12 }}>{stock.code}</span>
-        <span className="price">{realtime?.price?.toFixed(2) || '--'}</span>
-        <span className="change-pct" style={{ color: up ? '#22c55e' : '#ef4444' }}>
+      <div className="flex items-baseline gap-4 px-5 py-3 bg-surface">
+        <span className="text-muted text-sm">{stock.name}</span>
+        <span className="text-xs text-muted">{stock.code}</span>
+        <span className="text-2xl font-bold">{realtime?.price?.toFixed(2) || '--'}</span>
+        <span className={`text-base font-semibold ${up ? 'text-up' : 'text-down'}`}>
           {pct > 0 ? '+' : ''}{pct.toFixed(2)}%
         </span>
       </div>
-      <div className="info-row">
-        <div className="info-card"><div className="lbl">成交量</div><div className="val">{realtime?.volume ? (realtime.volume / 10000).toFixed(0) + '万' : '--'}</div></div>
-        <div className="info-card"><div className="lbl">ROE</div><div className="val">{financial?.roe?.toFixed(1) || '--'}%</div></div>
-        <div className="info-card"><div className="lbl">负债率</div><div className="val">{financial?.debt_ratio?.toFixed(1) || '--'}%</div></div>
-        <div className="info-card"><div className="lbl">MACD</div>
-          <div className="val" style={{ color: (indicators?.macd?.macd ?? 0) > 0 ? '#22c55e' : '#ef4444' }}>
-            {indicators?.macd ? (indicators.macd.macd > 0 ? '金叉' : '死叉') + ' ' + indicators.macd.macd.toFixed(1) : '--'}
-          </div>
-        </div>
-        <div className="info-card"><div className="lbl">RSI(14)</div>
-          <div className="val" style={{ color: (indicators?.rsi?.rsi14 ?? 50) > 70 ? '#ef4444' : (indicators?.rsi?.rsi14 ?? 50) < 30 ? '#22c55e' : '#ddd' }}>
-            {indicators?.rsi?.rsi14?.toFixed(0) || '--'}
-          </div>
-        </div>
-        <div className="info-card"><div className="lbl">KDJ</div>
-          <div className="val">
-            {indicators?.kdj?.k != null ? `K${indicators.kdj.k.toFixed(0)} D${indicators.kdj.d.toFixed(0)}` : '--'}
-          </div>
-        </div>
-        <div className="info-card"><div className="lbl">布林带</div>
-          <div className="val">
-            {indicators?.boll?.mid ? `${indicators.boll.mid.toFixed(0)}` : '--'}
-          </div>
-        </div>
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(100px,1fr))] gap-2 px-4 pb-3">
+        {cards.map(c => (
+          <Card key={c.label} className="p-2.5 text-center shadow-none border border-border/50">
+            <div className="text-[10px] text-muted whitespace-nowrap">{c.label}</div>
+            <div className={`text-sm font-semibold ${c.color || ''}`}>{c.value}</div>
+          </Card>
+        ))}
       </div>
     </div>
   )
