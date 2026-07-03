@@ -52,45 +52,31 @@ async def chat(req: ChatRequest):
 
     stocks = await get_session_stocks(sid)
 
-    # Build stock data context
-    stock_data = ""
-    for s in stocks:
-        code = s["code"]
-        try:
-            data, _ = await data_engine.get_realtime(code)
-            financial, _ = await data_engine.get_financial(code)
-            bars, _ = await data_engine.get_klines(code, "daily", "2026-06-01", "2026-07-03")
-            from app.indicators import compute_all
-            indicators = await compute_all(bars[-60:]) if bars else []
-            last_ind = indicators[-1] if indicators else {}
+    # Agent mode: give Hermes curl instructions instead of pre-fetching all data
+    stock_list = ", ".join(f"{s['name']}({s['code']})" for s in stocks)
 
-            price = data.get("price", "N/A") if data else "N/A"
-            pct = data.get("change_pct", 0) if data else 0
-            stock_data += f"\n## {s['name']} ({code})\n"
-            stock_data += f"- 最新价: ¥{price} ({pct:+.2f}%)\n"
-            if financial:
-                stock_data += f"- ROE: {financial.get('roe', 'N/A')}% | 负债率: {financial.get('debt_ratio', 'N/A')}%\n"
-            if last_ind and last_ind.get("macd"):
-                m = last_ind["macd"]
-                stock_data += f"- MACD: dif={m['dif']:.2f} dea={m['dea']:.2f} macd={m['macd']:.2f}\n"
-            if last_ind and last_ind.get("rsi"):
-                stock_data += f"- RSI(14): {last_ind['rsi']['rsi14']}\n"
-            if last_ind and last_ind.get("kdj") and last_ind["kdj"]["k"]:
-                kdj = last_ind["kdj"]
-                stock_data += f"- KDJ: k={kdj['k']:.1f} d={kdj['d']:.1f} j={kdj['j']:.1f}\n"
-            if last_ind and last_ind.get("boll") and last_ind["boll"]["mid"]:
-                b = last_ind["boll"]
-                stock_data += f"- 布林带: upper={b['upper']:.1f} mid={b['mid']:.1f} lower={b['lower']:.1f}\n"
-        except Exception:
-            pass
+    prompt = f"""{skill_content}
 
-    prompt = f"""以下是当前股票数据，请进行分析回答用户问题。
+你是股票分析 Agent。可以通过终端运行 curl 获取数据。后端运行在 localhost:8002。
 
-{stock_data}
+## 可用数据 API:
+- 搜索: curl -s "http://localhost:8002/api/v1/search?q=<关键词>"
+- K线: curl -s "http://localhost:8002/api/v1/stock/<代码>/kline?period=daily&start=YYYY-MM-DD&end=YYYY-MM-DD"
+- 实时: curl -s "http://localhost:8002/api/v1/stock/<代码>/realtime"
+- 财务: curl -s "http://localhost:8002/api/v1/stock/<代码>/financial"
+- 指标: curl -s "http://localhost:8002/api/v1/stock/<代码>/indicators?days=60"
+
+## 当前标的: {stock_list}
+
+## 规则:
+1. 需要数据时主动 curl 获取，不要编造
+2. 股票代码格式: sh.600519, sz.000001
+3. 数据返回 JSON，提取相关字段分析
+4. 用 Markdown 表格呈现关键指标
+5. 给出客观分析，不做买卖建议
 
 用户问题: {req.message}
-
-请基于以上真实数据进行分析。如果数据不足以回答，说明需要哪些额外数据。"""
+"""
 
     async def event_stream():
         yield f'data: {{"session_id": "{sid}"}}\n\n'

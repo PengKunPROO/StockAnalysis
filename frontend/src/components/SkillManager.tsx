@@ -1,83 +1,48 @@
 import { useState, useEffect } from 'react'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
 import { listSkills, uploadSkill, deleteSkill } from '../api/skills'
 import type { SkillMeta } from '../types'
 
-interface Props {
-  open: boolean
-  onClose: () => void
-  onRefresh: () => void
-}
+interface Props { open: boolean; onClose: () => void; onRefresh: () => void }
 
 export default function SkillManager({ open, onClose, onRefresh }: Props) {
   const [skills, setSkills] = useState<SkillMeta[]>([])
-
-  useEffect(() => {
-    if (open) listSkills().then(d => setSkills(d.skills))
-  }, [open])
+  useEffect(() => { if (open) listSkills().then(d => setSkills(d.skills)) }, [open])
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    await uploadSkill(file)
-    const d = await listSkills()
-    setSkills(d.skills)
-    onRefresh()
+    const f = e.target.files?.[0]; if (!f) return
+    await uploadSkill(f)
+    const d = await listSkills(); setSkills(d.skills); onRefresh()
   }
-
-  const handleDelete = async (name: string) => {
-    await deleteSkill(name)
-    const d = await listSkills()
-    setSkills(d.skills)
-    onRefresh()
-  }
-
-  if (!open) return null
 
   return (
-    <div style={{
-      position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-      background: 'rgba(0,0,0,0.6)', zIndex: 200,
-      display: 'flex', justifyContent: 'center', alignItems: 'center',
-    }} onClick={onClose}>
-      <div style={{
-        background: '#2a2a3e', borderRadius: 12, padding: 20,
-        width: 480, maxHeight: '80vh', overflow: 'auto',
-      }} onClick={e => e.stopPropagation()}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-          <span style={{ fontSize: 18, fontWeight: 600 }}>Skill 管理</span>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#999', cursor: 'pointer', fontSize: 20 }}>✕</button>
-        </div>
-
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-[480px]">
+        <DialogHeader><DialogTitle>Skill 管理</DialogTitle></DialogHeader>
         {skills.map(s => (
-          <div key={s.name} style={{
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            padding: '8px 12px', background: '#333', borderRadius: 8, marginBottom: 8,
-          }}>
+          <div key={s.name} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
             <div>
-              <div style={{ fontWeight: 600 }}>{s.name}</div>
-              <div style={{ color: '#888', fontSize: 12 }}>{s.description || s.filename}</div>
+              <div className="font-semibold text-sm">{s.name}</div>
+              <div className="text-xs text-muted">{s.description || s.filename}</div>
             </div>
-            <button onClick={() => handleDelete(s.name)} style={{
-              background: '#c0392b', color: '#fff', border: 'none', borderRadius: 4,
-              padding: '4px 10px', cursor: 'pointer', fontSize: 12,
-            }}>删除</button>
+            <Button
+              variant="destructive" size="sm"
+              onClick={async () => { await deleteSkill(s.name); const d = await listSkills(); setSkills(d.skills); onRefresh() }}
+              title="删除此 Skill"
+            >
+              删除
+            </Button>
           </div>
         ))}
-
-        {skills.length === 0 && (
-          <div style={{ color: '#666', textAlign: 'center', padding: 20 }}>暂无 Skill，请导入</div>
-        )}
-
-        <label style={{
-          display: 'block', marginTop: 16, padding: '10px 16px',
-          background: '#2563eb', color: '#fff', borderRadius: 8,
-          textAlign: 'center', cursor: 'pointer', fontSize: 14,
-        }}>
-          导入 Skill (.md 文件)
-          <input type="file" accept=".md" onChange={handleUpload}
-            style={{ display: 'none' }} />
+        {skills.length === 0 && <div className="text-center text-muted py-8">暂无 Skill，请导入</div>}
+        <label className="block w-full cursor-pointer">
+          <Button variant="default" className="w-full" asChild>
+            <span>导入 Skill (.md)</span>
+          </Button>
+          <input type="file" accept=".md" onChange={handleUpload} className="hidden" />
         </label>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }
