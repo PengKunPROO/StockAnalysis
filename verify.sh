@@ -1,6 +1,6 @@
 #!/bin/bash
 set -e
-ROOT="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(git rev-parse --show-toplevel)"
 echo "=== Stock Agent Test Suite ==="
 
 # Backend tests
