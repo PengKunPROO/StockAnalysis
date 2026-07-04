@@ -48,8 +48,9 @@ export default function DiagnosisPanel() {
     await chatStream({ session_id: sid || undefined, skill, message: um, stock_codes: state.currentStock ? [{ code: state.currentStock.code, name: state.currentStock.name }] : [] }, {
       onSessionId: id => setSid(id),
       onStatus: s => setStatus(s),
-      onDone: () => { setMessages(p => [...p, { role: 'assistant', content: fc }]); setStream(''); setLoading(false) },
-      onError: e => { setMessages(p => [...p, { role: 'assistant', content: `Error: ${e}` }]); setStream(''); setLoading(false) },
+      onContent: c => { fc += c; setStream(fc); setStatus('') },
+      onDone: () => { setMessages(p => [...p, { role: 'assistant', content: fc }]); setStream(''); setLoading(false); setStatus('') },
+      onError: e => { setMessages(p => [...p, { role: 'assistant', content: `Error: ${e}` }]); setStream(''); setLoading(false); setStatus('') },
     })
   }
 
