@@ -4,11 +4,15 @@ from pydantic import BaseModel
 import asyncio, json, os, uuid, subprocess, re
 from concurrent.futures import ThreadPoolExecutor
 
-# Filter Hermes output: strip ANSI, remove boilerplate
+# Filter Hermes output: strip ANSI, wait for analysis content to start
 ANSI_RE = re.compile(r'\x1b\[[0-9;]*m')
+ANALYSIS_START = re.compile(r'╭─.*Hermes.*─+╮')
+ANALYSIS_END = re.compile(r'╰─+')
+
+
 def _filter_line(line: str) -> str | None:
     """Clean Hermes output: strip ANSI, skip boilerplate. Returns filtered line or None to skip."""
-    clean = ANSI_RE.sub('', line)
+    clean = ANSI_RE.sub('', line).rstrip('\n')
     for pat in SKIP_PATTERNS:
         if re.match(pat, clean):
             return None
@@ -27,6 +31,7 @@ SKIP_PATTERNS = [
     r'^description:',
     r'^mode:',
     r'^---',
+    r'^hermes --resume',
 ]
 from app.diagnosis.sessions import (
     create_session, add_stock_to_session, get_session_stocks,
@@ -97,7 +102,20 @@ async def chat(req: ChatRequest):
             yield f'data: {json.dumps({"status": "agent_starting"}, ensure_ascii=False)}\n\n'
 
             full_output = ""
+            in_analysis = False
             for line in proc.stdout:
+                if not in_analysis:
+                    # Wait for analysis start marker
+                    clean = ANSI_RE.sub('', line)
+                    if ANALYSIS_START.search(clean):
+                        in_analysis = True
+                    continue
+
+                # Check for analysis end
+                clean = ANSI_RE.sub('', line)
+                if ANALYSIS_END.search(clean):
+                    continue
+
                 filtered = _filter_line(line)
                 if filtered is not None:
                     full_output += filtered
