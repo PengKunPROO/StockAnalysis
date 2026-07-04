@@ -31,16 +31,23 @@ export default function DiagnosisPanel() {
   const [stream, setStream] = useState('')
   const [sid, setSid] = useState<string | null>(null)
   const [skill, setSkill] = useState(state.skills[0]?.name || '默认分析')
+  const [status, setStatus] = useState('')
   const br = useRef<HTMLDivElement>(null)
   useEffect(() => { br.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages, stream])
+
+  const statusText: Record<string, string> = {
+    agent_starting: '🤖 Agent 初始化中...',
+    fetching_data: '📡 获取数据中...',
+  }
 
   const send = async () => {
     if (!input.trim() || loading) return
     const um = input.trim(); setInput('')
-    setMessages(p => [...p, { role: 'user', content: um }]); setLoading(true); setStream('')
+    setMessages(p => [...p, { role: 'user', content: um }]); setLoading(true); setStream(''); setStatus('agent_starting')
     let fc = ''
     await chatStream({ session_id: sid || undefined, skill, message: um, stock_codes: state.currentStock ? [{ code: state.currentStock.code, name: state.currentStock.name }] : [] }, {
-      onSessionId: id => setSid(id), onContent: c => { fc += c; setStream(fc) },
+      onSessionId: id => setSid(id),
+      onStatus: s => setStatus(s),
       onDone: () => { setMessages(p => [...p, { role: 'assistant', content: fc }]); setStream(''); setLoading(false) },
       onError: e => { setMessages(p => [...p, { role: 'assistant', content: `Error: ${e}` }]); setStream(''); setLoading(false) },
     })
@@ -55,8 +62,13 @@ export default function DiagnosisPanel() {
         <span style={{ fontSize: 11, color: 'var(--muted)', marginLeft: 'auto' }}>{state.currentStock?.name || '选择股票'}</span>
       </div>
       <div className="messages">
-        {messages.length === 0 && !stream && <div className="empty">输入分析问题开始对话</div>}
+        {messages.length === 0 && !stream && !loading && <div className="empty">输入分析问题开始对话</div>}
         {messages.map((m, i) => <MsgBubble key={i} msg={m} />)}
+        {loading && status && statusText[status] && (
+          <div className="msg-row assistant">
+            <div className="msg-bubble assistant" style={{ opacity: 0.7, fontStyle: 'italic' }}>{statusText[status]}</div>
+          </div>
+        )}
         {stream && <MsgBubble msg={{ role: 'assistant', content: stream }} />}
         <div ref={br} />
       </div>

@@ -7,6 +7,7 @@ interface ChatParams {
 
 interface ChatEvents {
   onSessionId?: (id: string) => void
+  onStatus?: (status: string) => void
   onContent?: (chunk: string) => void
   onDone?: () => void
   onError?: (err: string) => void
@@ -34,6 +35,7 @@ export async function chatStream(params: ChatParams, events: ChatEvents) {
           try {
             const data = JSON.parse(line.slice(6))
             if (data.session_id) events.onSessionId?.(data.session_id)
+            if (data.status) events.onStatus?.(data.status)
             if (data.content !== undefined) events.onContent?.(data.content)
             if (data.done) events.onDone?.()
           } catch {}

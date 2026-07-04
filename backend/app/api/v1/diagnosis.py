@@ -64,12 +64,12 @@ async def chat(req: ChatRequest):
 
 你是股票分析 Agent。可以通过终端运行 curl 获取数据。后端运行在 localhost:8002。
 
-## 可用数据 API:
-- 搜索: curl -s "http://localhost:8002/api/v1/search?q=<关键词>"
-- K线: curl -s "http://localhost:8002/api/v1/stock/<代码>/kline?period=daily&start=YYYY-MM-DD&end=YYYY-MM-DD"
-- 实时: curl -s "http://localhost:8002/api/v1/stock/<代码>/realtime"
-- 财务: curl -s "http://localhost:8002/api/v1/stock/<代码>/financial"
-- 指标: curl -s "http://localhost:8002/api/v1/stock/<代码>/indicators?days=60"
+## 可用数据 API (每次 curl 加 --max-time 15):
+- 搜索: curl -s --max-time 15 "http://localhost:8002/api/v1/search?q=<关键词>"
+- K线: curl -s --max-time 15 "http://localhost:8002/api/v1/stock/<代码>/kline?period=daily&start=YYYY-MM-DD&end=YYYY-MM-DD"
+- 实时: curl -s --max-time 15 "http://localhost:8002/api/v1/stock/<代码>/realtime"
+- 财务: curl -s --max-time 15 "http://localhost:8002/api/v1/stock/<代码>/financial"
+- 指标: curl -s --max-time 15 "http://localhost:8002/api/v1/stock/<代码>/indicators?days=60"
 
 ## 当前标的: {stock_list}
 
@@ -94,11 +94,16 @@ async def chat(req: ChatRequest):
                 env=env, text=True, encoding="utf-8", errors="replace",
             )
 
+            yield f'data: {json.dumps({"status": "agent_starting"}, ensure_ascii=False)}\n\n'
+
             full_output = ""
             for line in proc.stdout:
                 filtered = _filter_line(line)
                 if filtered is not None:
                     full_output += filtered
+                    # Detect tool execution for status
+                    if "$" in filtered and "curl" in filtered:
+                        yield f'data: {json.dumps({"status": "fetching_data"}, ensure_ascii=False)}\n\n'
                     yield f"data: {json.dumps({'content': filtered}, ensure_ascii=False)}\n\n"
 
             proc.wait()
