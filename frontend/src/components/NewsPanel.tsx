@@ -18,13 +18,17 @@ export default function NewsPanel() {
 
   const fetchNews = async (refresh = false) => {
     if (!stock) return
-    setLoading(true); setError('')
+    setLoading(true)
     try {
       const url = `/api/v1/news/stock/${stock.code}${refresh ? '?refresh=true' : ''}`
       const r = await fetch(url)
       const d = await r.json()
-      setNews(d.news || [])
-      if (d.error) setError(d.error)
+      if (d.news && d.news.length > 0) {
+        setNews(d.news)
+        setError('')
+      } else {
+        setError(d.error || '暂未找到相关新闻')
+      }
     } catch { setError('获取新闻失败') }
     setLoading(false)
   }

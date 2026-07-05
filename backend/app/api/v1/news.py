@@ -51,6 +51,7 @@ async def _fetch_news_akshare(code: str):
         )
     except asyncio.TimeoutError:
         return {"code": code, "news": [], "cached": False, "error": "新闻获取超时，请稍后重试"}, []
+    except Exception as e:
         return {"code": code, "news": [], "cached": False, "error": f"新闻获取失败: {e}"}, []
 
     if not articles:
