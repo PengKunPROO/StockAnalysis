@@ -52,7 +52,7 @@ All under `/api/v1/` — router tree: `backend/app/api/v1/router.py`. Endpoints:
 
 ### News
 - `GET /api/v1/news/stock/{code}` caches results per day. Pass `?refresh=true` to force re-fetch via LLM subprocess.
-- News fetching calls `hermes chat -Q -q --max-turns 1` subprocess (requires `hermes` CLI in PATH).
+- News fetching calls `hermes chat -Q -q --max-turns 5` subprocess (requires `hermes` CLI in PATH). `--max-turns` must be >= 3 to allow web search tools.
 - Analysis uses SSE streaming from the same `hermes` subprocess.
 
 ## Commit & Push
