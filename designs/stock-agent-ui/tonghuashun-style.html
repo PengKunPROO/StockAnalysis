@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Stock Agent — 同花顺风格</title>
+<style>
+:root {
+  --bg: #0a0e14; --surf: #11161e; --surf2: #161c26;
+  --text: #bcc4d0; --h: #e8ecf2; --muted: #5c6678;
+  --up: #e1525c; --down: #22ab5c;
+  --acc: #2962ff; --border: #1e2632; --gold: #f0a030;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font:12px/1.5 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif; background:var(--bg); color:var(--text); }
+.app { display:flex; height:100vh; overflow:hidden; }
+
+/* ---- Sidebar ---- */
+.side { width:200px; background:var(--surf); border-right:1px solid var(--border); display:flex; flex-direction:column; flex-shrink:0; }
+.side-hd { padding:8px 10px; font-size:13px; color:var(--h); border-bottom:1px solid var(--border); display:flex; align-items:center; gap:6px; }
+.side-hd span { font-weight:600; }
+.side-hd .dot { width:6px; height:6px; background:var(--up); border-radius:50%; }
+.side-tabs { display:flex; border-bottom:1px solid var(--border); }
+.side-tabs div { flex:1; text-align:center; padding:6px; font-size:11px; color:var(--muted); cursor:pointer; }
+.side-tabs div.active { color:var(--acc); border-bottom:2px solid var(--acc); }
+.side-list { flex:1; overflow-y:auto; padding:4px 0; }
+.stock-row { padding:6px 10px; cursor:pointer; border-bottom:1px solid rgba(30,38,50,.5); }
+.stock-row:hover { background:rgba(41,98,255,.08); }
+.stock-row.active { background:rgba(41,98,255,.12); border-left:3px solid var(--acc); }
+.stock-row .nm { color:var(--h); font-size:12px; }
+.stock-row .cd { color:var(--muted); font-size:10px; margin-left:4px; }
+.stock-row .pr { float:right; font-size:12px; color:var(--up); }
+
+/* ---- Main ---- */
+.main { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+
+/* Top bar */
+.topbar { padding:6px 12px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:10px; }
+.topbar input { flex:1; padding:5px 10px; border-radius:4px; border:1px solid var(--border); background:var(--surf2); color:var(--h); font-size:12px; max-width:300px; }
+.topbar .idx { display:flex; gap:12px; font-size:11px; }
+.topbar .idx span { color:var(--up); }
+.topbar .idx .dn { color:var(--down); }
+
+/* Content area */
+.content { flex:1; display:flex; overflow:hidden; }
+.center { flex:1; display:flex; flex-direction:column; overflow-y:auto; }
+
+/* Stock header */
+.stk-hd { padding:8px 12px; display:flex; align-items:baseline; gap:8px; border-bottom:1px solid var(--border); }
+.stk-hd .name { font-size:16px; color:var(--h); font-weight:700; }
+.stk-hd .code { font-size:11px; color:var(--muted); }
+.stk-hd .price { font-size:22px; color:var(--up); font-weight:700; margin-left:auto; }
+.stk-hd .chg { font-size:13px; color:var(--up); }
+
+/* K-line placeholder */
+.kline { height:200px; background:var(--surf2); border-bottom:1px solid var(--border); position:relative; }
+.kline svg { width:100%; height:100%; padding:10px; }
+
+/* Quick stats */
+.stats { display:flex; gap:1px; background:var(--border); }
+.stats > div { flex:1; background:var(--surf); padding:6px 8px; text-align:center; }
+.stats .lbl { font-size:10px; color:var(--muted); }
+.stats .val { font-size:13px; color:var(--h); font-weight:600; }
+.stats .val.up { color:var(--up); }
+.stats .val.dn { color:var(--down); }
+
+/* ---- News panel ---- */
+.news-panel { border-top:2px solid var(--acc); margin:6px 12px 0; }
+.news-panel .hd { display:flex; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid var(--border); }
+.news-panel .hd span { font-size:13px; color:var(--h); font-weight:600; }
+.news-panel .hd button { margin-left:auto; padding:2px 10px; border-radius:3px; border:1px solid var(--acc); background:transparent; color:var(--acc); font-size:10px; cursor:pointer; }
+.news-item { padding:6px 0; border-bottom:1px solid rgba(30,38,50,.4); cursor:pointer; display:flex; gap:8px; align-items:flex-start; }
+.news-item:hover { background:rgba(41,98,255,.04); }
+.news-item .dot { width:4px; height:4px; background:var(--gold); border-radius:50%; margin-top:4px; flex-shrink:0; }
+.news-item .txt { flex:1; font-size:11px; line-height:1.5; }
+.news-item .txt .title { color:var(--h); }
+.news-item .txt .src { color:var(--muted); font-size:10px; margin-top:2px; }
+.news-item .arrow { color:var(--acc); font-size:10px; flex-shrink:0; margin-top:1px; opacity:0; }
+.news-item:hover .arrow { opacity:1; }
+
+/* AI analysis inline */
+.ai-inline { margin:4px 0 4px 16px; padding:6px 10px; background:rgba(41,98,255,.06); border-left:2px solid var(--acc); border-radius:0 4px 4px 0; font-size:11px; color:var(--text); display:none; }
+.ai-inline.open { display:block; }
+.ai-inline .tag { display:inline-block; padding:1px 6px; border-radius:3px; font-size:10px; margin-right:4px; }
+.ai-inline .tag.bull { background:rgba(225,82,92,.15); color:var(--up); }
+.ai-inline .tag.bear { background:rgba(34,171,92,.15); color:var(--down); }
+
+/* Right panel */
+.right { width:300px; background:var(--surf); border-left:1px solid var(--border); display:flex; flex-direction:column; flex-shrink:0; }
+.right .rhd { padding:8px 10px; border-bottom:1px solid var(--border); font-size:13px; color:var(--h); display:flex; align-items:center; gap:4px; }
+.rchat { flex:1; overflow-y:auto; padding:8px; }
+.rchat .msg { margin-bottom:6px; font-size:11px; }
+.rchat .msg .role { font-weight:600; margin-bottom:2px; }
+.rchat .msg.ai .role { color:var(--acc); }
+.rchat .msg.user .role { color:var(--gold); }
+.rinp { padding:8px; border-top:1px solid var(--border); display:flex; gap:4px; }
+.rinp textarea { flex:1; padding:6px 8px; border-radius:4px; border:1px solid var(--border); background:var(--surf2); color:var(--h); font-size:11px; resize:none; height:32px; }
+.rinp button { padding:4px 14px; border-radius:4px; border:none; background:var(--acc); color:#fff; font-size:11px; cursor:pointer; }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- Sidebar -->
+  <div class="side">
+    <div class="side-hd"><span>自选股</span><div class="dot"></div><span style="margin-left:auto;font-size:10px;color:var(--muted)">15</span></div>
+    <div class="side-tabs"><div class="active">全部</div><div>沪</div><div>深</div></div>
+    <div class="side-list">
+      <div class="stock-row active"><span class="nm">贵州茅台</span><span class="cd">sh.600519</span><span class="pr">+0.84%</span></div>
+      <div class="stock-row"><span class="nm">工业富联</span><span class="cd">sh.601138</span><span class="pr" style="color:var(--down)">-2.31%</span></div>
+      <div class="stock-row"><span class="nm">宁德时代</span><span class="cd">sz.300750</span><span class="pr">+1.52%</span></div>
+      <div class="stock-row"><span class="nm">五粮液</span><span class="cd">sz.000858</span><span class="pr" style="color:var(--down)">-0.67%</span></div>
+      <div class="stock-row" onclick="return false"><span class="nm" style="color:var(--muted)">+ 添加自选</span></div>
+    </div>
+  </div>
+
+  <!-- Main -->
+  <div class="main">
+    <div class="topbar">
+      <input placeholder="搜索股票代码/名称..." value="贵州茅台">
+      <div class="idx">上证 <span>3,245.21</span> +0.62% &nbsp; 深证 <span class="dn">10,832.14</span> -0.21%</div>
+    </div>
+
+    <div class="content">
+      <div class="center">
+        <div class="stk-hd">
+          <span class="name">贵州茅台</span><span class="code">SH.600519</span>
+          <span class="price">1,203.00</span><span class="chg">+10.00 +0.84%</span>
+        </div>
+
+        <div class="stats">
+          <div><div class="lbl">开盘</div><div class="val">1,195.00</div></div>
+          <div><div class="lbl">最高</div><div class="val up">1,210.00</div></div>
+          <div><div class="lbl">最低</div><div class="val dn">1,185.00</div></div>
+          <div><div class="lbl">成交量</div><div class="val">342万</div></div>
+          <div><div class="lbl">换手率</div><div class="val">0.28%</div></div>
+          <div><div class="lbl">MACD</div><div class="val dn">死叉</div></div>
+          <div><div class="lbl">RSI(14)</div><div class="val">37.3</div></div>
+        </div>
+
+        <!-- K-line chart placeholder -->
+        <div class="kline">
+          <svg viewBox="0 0 600 190">
+            <line x1="40" y1="170" x2="570" y2="170" stroke="#1e2632" stroke-width="1"/>
+            <polyline fill="none" stroke="#2962ff" stroke-width="2" points="40,110 80,100 120,95 160,85 200,90 240,75 280,65 320,50 360,55 400,45 440,35 480,40 520,30 560,25"/>
+            <polyline fill="none" stroke="#f0a030" stroke-width="1" points="40,120 80,115 120,110 160,100 200,105 240,90 280,80 320,65 360,70 400,60 440,50 480,55 520,45 560,40"/>
+            <line x1="40" y1="40" x2="570" y2="40" stroke="#1e2632" stroke-width="1" stroke-dasharray="4"/>
+            <line x1="40" y1="100" x2="570" y2="100" stroke="#1e2632" stroke-width="1" stroke-dasharray="4"/>
+            <text x="10" y="45" fill="#5c6678" font-size="9">1,274</text>
+            <text x="10" y="105" fill="#5c6678" font-size="9">1,217</text>
+            <text x="10" y="175" fill="#5c6678" font-size="9">1,160</text>
+          </svg>
+        </div>
+
+        <!-- News Panel -->
+        <div class="news-panel">
+          <div class="hd"><span>📰 相关新闻</span><select style="border:1px solid var(--border);background:var(--surf2);color:var(--h);font-size:10px;padding:2px 4px;border-radius:3px"><option>近3天</option><option>近7天</option><option>近30天</option></select><button>刷新</button></div>
+          
+          <div class="news-item" onclick="this.querySelector('.ai-inline').classList.toggle('open')">
+            <div class="dot"></div>
+            <div class="txt"><div class="title">茅台Q2营收增长15%超预期，机构上调目标价至1400元</div><div class="src">东方财富 · 2小时前</div></div>
+            <div class="arrow">▸</div>
+          </div>
+          <div class="ai-inline">
+            <span class="tag bull">利好</span> 营收超预期直接提振基本面信心。Q2增速15%高于行业均值，机构上调目标价预示短期情绪向好。需关注后续控价政策风险。
+          </div>
+
+          <div class="news-item">
+            <div class="dot"></div>
+            <div class="txt"><div class="title">白酒板块集体回调，市场担心消费税改革影响</div><div class="src">雪球 · 5小时前</div></div>
+            <div class="arrow">▸</div>
+          </div>
+
+          <div class="news-item">
+            <div class="dot"></div>
+            <div class="txt"><div class="title">北向资金连续3日净买入茅台，累计加仓超12亿</div><div class="src">新浪财经 · 8小时前</div></div>
+            <div class="arrow">▸</div>
+          </div>
+
+          <div class="news-item">
+            <div class="dot"></div>
+            <div class="txt"><div class="title">茅台中秋旺季临近，经销商备货积极性回升</div><div class="src">21财经 · 昨天</div></div>
+            <div class="arrow">▸</div>
+          </div>
+
+          <div class="news-item">
+            <div class="dot"></div>
+            <div class="txt"><div class="title">贵州茅台获ESG评级A级，白酒行业首例</div><div class="src">中证报 · 昨天</div></div>
+            <div class="arrow">▸</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right panel: AI chat -->
+      <div class="right">
+        <div class="rhd">🤖 AI 分析 <select style="margin-left:6px;border:1px solid var(--border);background:var(--surf2);color:var(--h);font-size:10px;padding:2px 4px;border-radius:3px"><option>股票分析</option></select></div>
+        <div class="rchat">
+          <div class="msg ai"><div class="role">AI 助手</div>技术面：MACD死叉持续，DIF/DEA在零轴下方，中期偏空。KDJ的J值-0.2进入极端超卖区，短期有技术性反弹需求。RSI 37.3偏弱区间。</div>
+          <div class="msg user"><div class="role">你</div>后市如何看？</div>
+          <div class="msg ai"><div class="role">AI 助手</div>短期（1-2周）：KDJ极端超卖+布林带击穿下轨，技术性反弹概率大，目标参考中轨1217。中期（1-3月）：MACD空头排列未收敛，需等待DIF走平确认筑底。关键观察：成交量能否配合反弹。</div>
+        </div>
+        <div class="rinp"><textarea placeholder="提问..."></textarea><button>发送</button></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

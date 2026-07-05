@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { searchStocks } from '../api/stocks'
 import { useApp } from '../contexts/AppContext'
 import { addToWatchlist } from '../api/watchlist'
@@ -11,17 +11,17 @@ export default function SearchBar() {
   const { state, dispatch } = useApp()
   const ref = useRef<HTMLDivElement>(null)
   const timer = useRef<ReturnType<typeof setTimeout>>()
-  const skipRef = useRef(false) // skip search after selection
+  const skipRef = useRef(false)
 
   useEffect(() => {
     const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
     document.addEventListener('mousedown', h); return () => document.removeEventListener('mousedown', h)
   }, [])
 
-  const doSearch = useCallback(async (v: string) => {
+  const doSearch = async (v: string) => {
     if (v.length < 1) { setOpen(false); return }
     try { setResults((await searchStocks(v)).results); setOpen(true) } catch { setOpen(false) }
-  }, [])
+  }
 
   const handle = (v: string) => {
     setQuery(v)
@@ -33,8 +33,7 @@ export default function SearchBar() {
   const select = async (s: StockInfo) => {
     skipRef.current = true
     dispatch({ type: 'SET_STOCK', stock: s })
-    setQuery(s.name)
-    setOpen(false)
+    setQuery(s.name); setOpen(false)
     if (!state.watchlist.find(w => w.code === s.code)) {
       await addToWatchlist(s.code, s.name)
       dispatch({ type: 'SET_WATCHLIST', watchlist: (await (await import('../api/watchlist')).getWatchlist()).stocks })
