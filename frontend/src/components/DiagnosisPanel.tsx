@@ -64,8 +64,8 @@ export default function DiagnosisPanel({ onManageSkills }: Props) {
     <div className="right">
       <div className="rhd">
         🤖 AI 分析
-        <select value={skill} onChange={e=>setSkill(e.target.value)} title="分析Skill">
-          {state.skills.map(s=><option key={s.name} value={s.name}>{s.name}</option>)}
+        <select value={skill} onChange={e=>setSkill(e.target.value)} title="分析Skill" style={{ maxWidth: 150 }}>
+          {state.skills.map(s=><option key={s.name} value={s.name}>{s.name}{s.source?.startsWith('hermes') ? ' 📦' : s.source === 'uploaded' ? ' 📤' : ''}</option>)}
           {state.skills.length===0 && <option value="默认分析">默认分析</option>}
         </select>
         <span className="icon" onClick={onManageSkills} title="管理Skill">⚙</span>

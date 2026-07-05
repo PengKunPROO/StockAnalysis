@@ -27,7 +27,8 @@ export interface SkillMeta {
   name: string
   description: string
   mode: string
-  filename: string
+  filename?: string
+  source?: string
 }
 
 export interface ChatMessage {
