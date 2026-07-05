@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useApp } from '../contexts/AppContext'
 import { chatStream } from '../api/diagnosis'
-import type { ChatMessage as ChatMsg } from '../types'
+import type { ChatMessage as ChatMsg, SkillMeta } from '../types'
 
 function renderMd(text: string): string {
   let html = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -28,6 +28,51 @@ function MsgBubble({ msg }: { msg: ChatMsg }) {
     <div className={`msg ${isUser ? 'user' : 'ai'}`}>
       <div className="role">{isUser ? '你' : 'AI 分析'}</div>
       {isUser ? msg.content : <div className="msg-body" dangerouslySetInnerHTML={{ __html: renderMd(msg.content) }} />}
+    </div>
+  )
+}
+
+function SkillPicker({ skills, value, onChange }: { skills: SkillMeta[]; value: string; onChange: (name: string) => void }) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const ref = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
+    document.addEventListener('mousedown', h); return () => document.removeEventListener('mousedown', h)
+  }, [])
+
+  const filtered = query.trim()
+    ? skills.filter(s => s.name.toLowerCase().includes(query.toLowerCase()) || s.description?.toLowerCase().includes(query.toLowerCase()))
+    : skills
+
+  const current = skills.find(s => s.name === value)
+  const tag = current?.source?.startsWith('hermes') ? '📦' : current?.source === 'uploaded' ? '📤' : ''
+
+  return (
+    <div ref={ref} style={{ position: 'relative', marginLeft: 'auto' }}>
+      <button className="skill-trigger" onClick={() => { setOpen(!open); setTimeout(() => inputRef.current?.focus(), 50) }}>
+        {tag} {value || '选择 Skill'}
+      </button>
+      {open && (
+        <div className="skill-dropdown">
+          <input ref={inputRef} className="skill-search" value={query} onChange={e => setQuery(e.target.value)}
+            placeholder="搜索 Skill 名称..." onKeyDown={e => { if (e.key === 'Escape') setOpen(false) }} />
+          <div className="skill-list">
+            {filtered.map(s => (
+              <div key={s.name} className={`skill-opt ${s.name === value ? 'sel' : ''}`} onClick={() => { onChange(s.name); setOpen(false); setQuery('') }}>
+                <div>
+                  <span className="sn">{s.name}</span>
+                  {s.source?.startsWith('hermes') ? <span className="stag hermes">本地</span> : s.source === 'uploaded' ? <span className="stag uploaded">上传</span> : null}
+                </div>
+                {s.description && <div className="sd">{s.description.slice(0, 60)}{s.description.length > 60 ? '…' : ''}</div>}
+              </div>
+            ))}
+            {filtered.length === 0 && <div className="skill-opt" style={{ color: 'var(--muted)', cursor: 'default' }}>无匹配结果</div>}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -73,13 +118,7 @@ export default function DiagnosisPanel({ onManageSkills }: Props) {
     <div className="chat-panel">
       <div className="chat-header">
         <span className="title">🧠 AI 诊断分析</span>
-        {skill && <span className="subtitle">· {skill}</span>}
-        <select value={skill} onChange={e => setSkill(e.target.value)}>
-          <option value="">默认分析</option>
-          {state.skills.map(s => (
-            <option key={s.name} value={s.name}>{s.name}{s.source?.startsWith('hermes') ? ' 📦' : s.source === 'uploaded' ? ' 📤' : ''}</option>
-          ))}
-        </select>
+        <SkillPicker skills={state.skills} value={skill} onChange={setSkill} />
         <button className="icon-btn" onClick={onManageSkills} title="管理 Skill">⚙</button>
       </div>
 

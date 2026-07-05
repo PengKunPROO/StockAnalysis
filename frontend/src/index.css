@@ -221,6 +221,22 @@ a:hover { text-decoration: underline; }
   .chat-panel { min-height: 350px; }
 }
 
+/* === Skill Picker === */
+.skill-trigger { padding: 5px 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface2); color: var(--heading); font-size: clamp(0.7rem, 0.9vw, 0.8rem); cursor: pointer; white-space: nowrap; max-width: 200px; overflow: hidden; text-overflow: ellipsis; }
+.skill-trigger:hover { border-color: var(--accent); }
+.skill-dropdown { position: absolute; top: 100%; right: 0; width: 320px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; margin-top: 4px; z-index: 300; box-shadow: 0 8px 24px rgba(0,0,0,.4); overflow: hidden; }
+.skill-search { width: 100%; padding: 10px 14px; border: none; border-bottom: 1px solid var(--border); background: var(--surface2); color: var(--heading); font-size: clamp(0.75rem, 1vw, 0.85rem); outline: none; }
+.skill-search::placeholder { color: var(--muted); }
+.skill-list { max-height: 280px; overflow-y: auto; }
+.skill-opt { padding: 8px 14px; border-bottom: 1px solid var(--border-light); cursor: pointer; transition: background .1s; }
+.skill-opt:hover { background: var(--accent-glow); }
+.skill-opt.sel { background: var(--accent-glow); border-left: 3px solid var(--accent); padding-left: 11px; }
+.skill-opt .sn { font-size: clamp(0.75rem, 0.9vw, 0.8rem); color: var(--heading); font-weight: 600; margin-right: 6px; }
+.skill-opt .sd { font-size: 0.65rem; color: var(--muted); margin-top: 2px; }
+.skill-opt .stag { font-size: 0.6rem; padding: 1px 5px; border-radius: 3px; }
+.skill-opt .stag.hermes { background: var(--accent-glow); color: var(--accent); }
+.skill-opt .stag.uploaded { background: var(--gold-bg); color: var(--gold); }
+
 /* === Animations === */
 @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 .msg { animation: fadeIn .3s ease; }
