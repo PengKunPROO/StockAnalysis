@@ -24,6 +24,9 @@ function renderMd(text: string): string {
 
 function MsgBubble({ msg }: { msg: ChatMsg }) {
   const isUser = msg.role === 'user'
+  if (msg.role === 'system') {
+    return <div className="msg-system">{msg.content}</div>
+  }
   return (
     <div className={`msg ${isUser ? 'user' : 'ai'}`}>
       <div className="role">{isUser ? '你' : 'AI 分析'}</div>
@@ -89,11 +92,22 @@ export default function DiagnosisPanel({ onManageSkills }: Props) {
   const [skill, setSkill] = useState(state.skills[0]?.name || '')
   const [status, setStatus] = useState('')
   const bottomRef = useRef<HTMLDivElement>(null)
+  const prevStockRef = useRef<string | null>(null)
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages, stream])
   useEffect(() => {
     if (!skill && state.skills.length > 0) setSkill(state.skills[0].name)
   }, [state.skills])
+
+  // Detect stock change -> insert context marker
+  useEffect(() => {
+    const code = state.currentStock?.code || null
+    if (prevStockRef.current && code && code !== prevStockRef.current) {
+      setMessages(p => [...p, { role: 'system', content: `已切换至 ${state.currentStock!.name} (${code})` }])
+      setSid(null) // start fresh session on stock switch
+    }
+    prevStockRef.current = code
+  }, [state.currentStock?.code])
 
   const send = async () => {
     if (!input.trim() || loading) return

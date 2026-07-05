@@ -23,6 +23,19 @@ async def add_stock_to_session(session_id: str, code: str, name: str):
         await session.commit()
 
 
+async def set_session_stocks(session_id: str, stock_codes: list[dict]):
+    """Replace session stocks with a new set — prevents stock accumulation across messages."""
+    factory = get_session_factory()
+    async with factory() as session:
+        from sqlalchemy import delete
+        await session.execute(
+            delete(SessionStock).where(SessionStock.session_id == session_id)
+        )
+        for s in stock_codes:
+            session.add(SessionStock(session_id=session_id, stock_code=s["code"], stock_name=s["name"]))
+        await session.commit()
+
+
 async def get_session_stocks(session_id: str) -> list[dict]:
     factory = get_session_factory()
     async with factory() as session:

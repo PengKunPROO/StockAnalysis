@@ -125,6 +125,7 @@ a:hover { text-decoration: underline; }
 .msg.ai .role { color: var(--accent); }
 .msg .time { font-size: 0.6rem; color: var(--muted); margin-top: 4px; }
 .msg.user .time { text-align: right; }
+.msg-system { text-align: center; padding: 4px 0; font-size: 0.65rem; color: var(--muted); }
 
 /* Markdown in AI messages */
 .msg.ai h2 { font-size: clamp(0.9rem, 1.1vw, 1rem); color: var(--heading); margin: 8px 0 4px; border-bottom: 1px solid var(--border-light); padding-bottom: 4px; }

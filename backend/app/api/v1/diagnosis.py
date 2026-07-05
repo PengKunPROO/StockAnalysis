@@ -4,8 +4,8 @@ from pydantic import BaseModel
 import asyncio, json, os, uuid, subprocess, re
 from concurrent.futures import ThreadPoolExecutor
 from app.diagnosis.sessions import (
-    create_session, add_stock_to_session, get_session_stocks,
-    get_messages, list_sessions, save_message,
+    create_session, add_stock_to_session, set_session_stocks,
+    get_session_stocks, get_messages, list_sessions, save_message,
 )
 from app.diagnosis.skills_manager import get_skill_content
 
@@ -74,8 +74,7 @@ async def chat(req: ChatRequest):
     if not sid:
         sid = await create_session(req.skill, "hermes", req.stock_codes or [])
     elif req.stock_codes:
-        for s in req.stock_codes:
-            await add_stock_to_session(sid, s["code"], s["name"])
+        await set_session_stocks(sid, req.stock_codes)
 
     stocks = await get_session_stocks(sid)
 
