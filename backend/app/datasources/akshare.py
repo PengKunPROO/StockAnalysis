@@ -170,7 +170,7 @@ class AShareSource:
 
         return await loop.run_in_executor(None, _fetch)
 
-    async def fetch_news(self, code: str, limit: int = 10) -> list[NewsArticle]:
+    async def fetch_news(self, code: str, limit: int = 20) -> list[NewsArticle]:
         import asyncio
         loop = asyncio.get_event_loop()
         raw_code = code.split(".", 1)[1]

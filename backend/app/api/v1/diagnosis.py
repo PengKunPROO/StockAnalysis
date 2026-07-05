@@ -79,9 +79,20 @@ async def chat(req: ChatRequest):
 
     stocks = await get_session_stocks(sid)
 
-    # Agent mode: give Hermes curl instructions instead of pre-fetching all data
     stock_list = ", ".join(f"{s['name']}({s['code']})" for s in stocks)
     skill_content = get_skill_content(req.skill) or ""
+
+    # Pre-fetch recent news context for analysis
+    news_context = ""
+    try:
+        from app.engine.data_engine import engine
+        for s in stocks[:3]:
+            news_data, _ = await engine.get_news(s["code"], limit=5)
+            if news_data:
+                items = [f"  - {n['title']} ({n.get('published_at', '')[:10]})" for n in news_data[:3]]
+                news_context += f"\n{s['name']}({s['code']}) 近期新闻:\n" + "\n".join(items)
+    except Exception:
+        pass
 
     prompt = f"""{skill_content}
 
@@ -96,6 +107,7 @@ async def chat(req: ChatRequest):
 - 新闻: curl -s --max-time 15 "http://localhost:8002/api/v1/news/stock/<代码>"
 
 ## 当前标的: {stock_list}
+{news_context}
 
 ## 规则:
 1. 需要数据时主动 curl 获取，不要编造
