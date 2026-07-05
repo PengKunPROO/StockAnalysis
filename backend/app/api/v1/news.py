@@ -1,51 +1,72 @@
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-import json, subprocess, os, re
-from datetime import date
+import asyncio, json, subprocess, os, re
+from datetime import date, datetime
 from app.db.database import get_session_factory
 from app.db.models import StockNews
 
 router = APIRouter(prefix="/news", tags=["news"])
 
 
-async def _fetch_news_from_llm(code: str):
+async def _fetch_news_akshare(code: str):
+    """Fetch news via akshare for A-share stocks. Returns (result_dict, articles_list)."""
     today = date.today()
-    prompt = f'搜索 "{code}" 最近3天的重要财经新闻，返回JSON数组，格式: [{{"title":"...","source":"东方财富/雪球/新浪等","url":"...","summary":"一句话摘要"}}]。只返回JSON，不要其他文字。最多5条。'
+
+    if not code.startswith(("sh.", "sz.")):
+        return {"code": code, "news": [], "cached": False, "error": "仅A股支持新闻获取"}, []
+
+    raw_code = code.split(".", 1)[1]
+    loop = asyncio.get_event_loop()
+
+    def _fetch():
+        import akshare as ak
+        df = ak.stock_news_em(symbol=raw_code)
+        # Column names: 关键词, 新闻标题, 新闻内容, 发布时间, 文章来源, 新闻链接
+        col_title = df.columns[1]
+        col_content = df.columns[2]
+        col_time = df.columns[3]
+        col_source = df.columns[4]
+        col_url = df.columns[5]
+
+        articles = []
+        for _, row in df.head(10).iterrows():
+            title = str(row[col_title])
+            content = str(row[col_content])[:200] if row[col_content] else ""
+            pub_time = str(row[col_time])
+            source = str(row[col_source])
+            url = str(row[col_url])
+
+            articles.append({
+                "title": title,
+                "source": source,
+                "url": url,
+                "summary": content,
+            })
+        return articles
 
     try:
-        result = subprocess.run(
-            ["hermes", "chat", "-Q", "-q", prompt, "--max-turns", "5"],
-            capture_output=True, text=True, encoding="utf-8", errors="replace",
-            env={**os.environ, "NO_COLOR": "1"}, timeout=120,
-        )
-        output = result.stdout
-    except subprocess.TimeoutExpired:
-        return {"code": code, "news": [], "cached": False, "error": "News fetch timeout"}, []
+        articles = await loop.run_in_executor(None, _fetch)
+    except Exception as e:
+        return {"code": code, "news": [], "cached": False, "error": f"新闻获取失败: {e}"}, []
 
-    json_match = re.search(r'\[[\s\S]*\]', output)
-    if not json_match:
-        return {"code": code, "news": [], "cached": False}, []
-
-    try:
-        articles = json.loads(json_match.group(0))
-    except json.JSONDecodeError:
-        return {"code": code, "news": [], "cached": False}, []
+    if not articles:
+        return {"code": code, "news": [], "cached": False, "error": "暂未找到相关新闻"}, []
 
     factory = get_session_factory()
     async with factory() as session:
         for a in articles[:5]:
             session.add(StockNews(
-                stock_code=code, title=a.get("title", ""),
-                source=a.get("source", ""), url=a.get("url", ""),
-                summary=a.get("summary", ""), fetched_at=today,
+                stock_code=code, title=a["title"],
+                source=a["source"], url=a["url"],
+                summary=a["summary"], fetched_at=today,
             ))
         await session.commit()
 
     return {"code": code, "news": [
-        {"title": a.get("title", ""), "source": a.get("source", ""), "url": a.get("url", ""), "summary": a.get("summary", "")}
+        {"title": a["title"], "source": a["source"], "url": a["url"], "summary": a["summary"]}
         for a in articles[:5]
-    ], "cached": False}, []
+    ], "cached": False}, articles
 
 
 @router.get("/stock/{code}")
@@ -63,7 +84,8 @@ async def get_news(code: str, refresh: bool = False):
                 )
             )
             await session.commit()
-        return (await _fetch_news_from_llm(code))[0]
+        result, _ = await _fetch_news_akshare(code)
+        return result
 
     async with factory() as session:
         result = await session.execute(
@@ -79,7 +101,8 @@ async def get_news(code: str, refresh: bool = False):
                 for n in cached
             ], "cached": True}
 
-    return (await _fetch_news_from_llm(code))[0]
+    result, _ = await _fetch_news_akshare(code)
+    return result
 
 
 class AnalyzeRequest(BaseModel):

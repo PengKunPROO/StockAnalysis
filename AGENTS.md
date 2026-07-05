@@ -51,9 +51,9 @@ All under `/api/v1/` — router tree: `backend/app/api/v1/router.py`. Endpoints:
 - Skills: markdown files in `backend/skills/` with YAML frontmatter (`name`, `description`, `mode`).
 
 ### News
-- `GET /api/v1/news/stock/{code}` caches results per day. Pass `?refresh=true` to force re-fetch via LLM subprocess.
-- News fetching calls `hermes chat -Q -q --max-turns 5` subprocess (requires `hermes` CLI in PATH). `--max-turns` must be >= 3 to allow web search tools.
-- Analysis uses SSE streaming from the same `hermes` subprocess.
+- `GET /api/v1/news/stock/{code}` caches results per day. Pass `?refresh=true` to force re-fetch.
+- A-share news fetched via `akshare.stock_news_em()` — fast, reliable, no LLM dependency.
+- News analysis uses `hermes chat -Q -q --max-turns 1` SSE streaming subprocess.
 
 ## Commit & Push
 - After fixing a bug or adding a feature, commit and push to `origin/main` immediately.
