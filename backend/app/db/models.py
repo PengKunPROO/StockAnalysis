@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Date, Integer, BigInteger, Numeric, Text, DateTime
+from sqlalchemy import Column, String, Date, Integer, BigInteger, Numeric, Text, DateTime, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.sql import func
 
@@ -88,3 +88,15 @@ class DiagnosisMessage(Base):
     tool_calls = Column(Text)
     tool_call_id = Column(String(100))
     created_at = Column(DateTime, server_default=func.now())
+
+
+class StockNews(Base):
+    __tablename__ = "stock_news"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    stock_code = Column(String(20), nullable=False)
+    title = Column(Text, nullable=False)
+    source = Column(String(100))
+    url = Column(Text)
+    summary = Column(Text)
+    fetched_at = Column(Date, nullable=False)
+    __table_args__ = (UniqueConstraint('stock_code', 'title', 'fetched_at'),)

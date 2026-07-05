@@ -6,6 +6,7 @@ import SearchBar from './components/SearchBar'
 import KlineChart from './components/KlineChart'
 import InfoCards from './components/InfoCards'
 import DiagnosisPanel from './components/DiagnosisPanel'
+import NewsPanel from './components/NewsPanel'
 import SkillManager from './components/SkillManager'
 
 function IconBar() {
@@ -47,7 +48,7 @@ function AppShell() {
       <div className="main">
         <IconBar />
         <div className="content">
-          {state.currentStock ? <><InfoCards /><KlineChart /></> : <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)', fontSize: 16 }}>搜索股票开始分析</div>}
+          {state.currentStock ? <><InfoCards /><KlineChart /><NewsPanel /></> : <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)', fontSize: 16 }}>搜索股票开始分析</div>}
         </div>
         <DiagnosisPanel />
       </div>
