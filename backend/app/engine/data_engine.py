@@ -142,24 +142,28 @@ class DataEngine:
         return all_results[:20], None
 
     async def get_news(self, code: str, limit: int = 5) -> tuple[list[dict], str | None]:
+        from app.datasources import get_all_sources_for_market
         market = self._market_from_code(code)
-        source = get_source_for_market(market)
-        if source is None:
+        sources = get_all_sources_for_market(market)
+        if not sources:
             return [], f"No datasource for market: {market}"
 
-        try:
-            articles = await source.fetch_news(code, limit)
-            return [
-                {
-                    "title": a.title, "source": a.source,
-                    "url": a.url, "summary": a.summary,
-                    "published_at": a.published_at,
-                }
-                for a in articles
-            ], None
-        except Exception as e:
-            logger.error(f"Failed to fetch news for {code}: {e}")
-            return [], f"News source temporarily unavailable"
+        for source in sources:
+            try:
+                articles = await source.fetch_news(code, limit)
+                if articles:
+                    return [
+                        {
+                            "title": a.title, "source": a.source,
+                            "url": a.url, "summary": a.summary,
+                            "published_at": a.published_at,
+                        }
+                        for a in articles[:limit]
+                    ], None
+            except Exception as e:
+                logger.error(f"News fetch failed for {code} via {source.name}: {e}")
+
+        return [], "暂未找到相关新闻"
 
     async def health(self) -> dict:
         healthy = get_healthy_sources()

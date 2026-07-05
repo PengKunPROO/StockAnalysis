@@ -2,6 +2,7 @@
 from app.datasources.tonghuashun import TonghuashunSource
 from app.datasources.yfinance import USStockSource
 from app.datasources.sample import SampleSource
+from app.datasources.akshare import AShareSource
 
 _registry: dict[str, object] = {}
 _built: bool = False
@@ -13,6 +14,7 @@ def _build_registry():
         return
     # Order matters: first registered = primary for market
     _registry["tonghuashun"] = TonghuashunSource()
+    _registry["akshare"] = AShareSource()
     _registry["yfinance"] = USStockSource()
     _registry["sample"] = SampleSource()
     _built = True
@@ -29,6 +31,11 @@ def get_source_for_market(market: str) -> object | None:
         if market in source.markets:
             return source
     return None
+
+
+def get_all_sources_for_market(market: str) -> list:
+    _build_registry()
+    return [s for s in _registry.values() if market in s.markets]
 
 
 def get_healthy_sources() -> list[str]:
