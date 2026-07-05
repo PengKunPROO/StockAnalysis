@@ -16,11 +16,12 @@ export default function NewsPanel() {
 
   useEffect(() => { if (stock) fetchNews() }, [stock])
 
-  const fetchNews = async () => {
+  const fetchNews = async (refresh = false) => {
     if (!stock) return
     setLoading(true); setError('')
     try {
-      const r = await fetch(`/api/v1/news/stock/${stock.code}`)
+      const url = `/api/v1/news/stock/${stock.code}${refresh ? '?refresh=true' : ''}`
+      const r = await fetch(url)
       const d = await r.json()
       setNews(d.news || [])
       if (d.error) setError(d.error)
@@ -63,7 +64,7 @@ export default function NewsPanel() {
     <div className="news-panel">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
         <span style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase' }}>📰 相关新闻</span>
-        <button onClick={fetchNews} disabled={loading}
+        <button onClick={() => fetchNews(true)} disabled={loading}
           style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontSize: 11 }}
           title="刷新新闻">{loading ? '搜索中...' : '刷新'}</button>
       </div>

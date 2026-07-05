@@ -3,21 +3,15 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import asyncio, json, os, uuid, subprocess, re
 from concurrent.futures import ThreadPoolExecutor
+from app.diagnosis.sessions import (
+    create_session, add_stock_to_session, get_session_stocks,
+    get_messages, list_sessions, save_message,
+)
+from app.diagnosis.skills_manager import get_skill_content
 
-# Filter Hermes output: strip ANSI, wait for analysis content to start
 ANSI_RE = re.compile(r'\x1b\[[0-9;]*m')
 ANALYSIS_START = re.compile(r'╭─.*Hermes.*─+╮')
 ANALYSIS_END = re.compile(r'╰─+')
-
-
-def _filter_line(line: str) -> str | None:
-    """Clean Hermes output: strip ANSI, skip boilerplate. Returns filtered line or None to skip."""
-    clean = ANSI_RE.sub('', line).rstrip('\n')
-    for pat in SKIP_PATTERNS:
-        if re.match(pat, clean):
-            return None
-    return clean
-
 
 SKIP_PATTERNS = [
     r'^Query:',
@@ -32,15 +26,37 @@ SKIP_PATTERNS = [
     r'^mode:',
     r'^---',
     r'^hermes --resume',
-    r'^\s*┊\s',     # Agent process lines: "┊ 📚 preparing", "┊ 💻 $ curl"
-    r'^\s*$',        # Blank lines
+    r'^\s*┊\s',
+    r'^\s*$',
 ]
-from app.diagnosis.sessions import (
-    create_session, add_stock_to_session, get_session_stocks,
-    get_messages, list_sessions, save_message,
-)
-from app.diagnosis.skills_manager import get_skill_content
-from app.engine.data_engine import engine as data_engine
+
+
+def _filter_line(line: str) -> str | None:
+    clean = ANSI_RE.sub('', line).rstrip('\n')
+    for pat in SKIP_PATTERNS:
+        if re.match(pat, clean):
+            return None
+    return clean
+
+
+def _read_subprocess(prompt: str, output_queue):
+    try:
+        env = {**os.environ, "NO_COLOR": "1"}
+        proc = subprocess.Popen(
+            ["hermes", "chat", "-q", prompt],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            env=env, text=True, encoding="utf-8", errors="replace",
+        )
+        for line in proc.stdout:
+            output_queue.put_nowait(line)
+        proc.wait()
+        # Signal end: None followed by returncode and stderr
+        stderr_text = proc.stderr.read().strip()
+        output_queue.put_nowait(None)
+        output_queue.put_nowait(proc.returncode)
+        output_queue.put_nowait(stderr_text)
+    except Exception as e:
+        output_queue.put_nowait(e)
 
 router = APIRouter(prefix="/diagnosis", tags=["diagnosis"])
 
@@ -92,57 +108,63 @@ async def chat(req: ChatRequest):
 
     async def event_stream():
         yield f'data: {{"session_id": "{sid}"}}\n\n'
+        yield f'data: {json.dumps({"status": "agent_starting"}, ensure_ascii=False)}\n\n'
 
-        try:
-            env = {**os.environ, "NO_COLOR": "1"}
-            proc = subprocess.Popen(
-                ["hermes", "chat", "-q", prompt],
-                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                env=env, text=True, encoding="utf-8", errors="replace",
-            )
+        queue = asyncio.Queue()
+        loop = asyncio.get_event_loop()
+        executor = ThreadPoolExecutor(max_workers=1)
+        loop.run_in_executor(executor, _read_subprocess, prompt, queue)
 
-            yield f'data: {json.dumps({"status": "agent_starting"}, ensure_ascii=False)}\n\n'
+        full_output = ""
+        in_analysis = False
+        returncode = 0
+        stderr_text = ""
 
-            full_output = ""
-            in_analysis = False
-            for line in proc.stdout:
-                if not in_analysis:
-                    # Wait for analysis start marker
-                    clean = ANSI_RE.sub('', line)
-                    if ANALYSIS_START.search(clean):
-                        in_analysis = True
-                    continue
-
-                # Check for analysis end
-                clean = ANSI_RE.sub('', line)
-                if ANALYSIS_END.search(clean):
-                    continue
-
-                filtered = _filter_line(line)
-                if filtered is not None:
-                    full_output += filtered
-                    # Detect tool execution for status
-                    if "$" in filtered and "curl" in filtered:
-                        yield f'data: {json.dumps({"status": "fetching_data"}, ensure_ascii=False)}\n\n'
-                    yield f"data: {json.dumps({'content': filtered}, ensure_ascii=False)}\n\n"
-
-            proc.wait()
-
-            if proc.returncode != 0:
-                stderr_text = proc.stderr.read().strip()
-                err = stderr_text or f"Hermes exited with code {proc.returncode}"
-                yield f"data: {json.dumps({'content': f'Agent Error: {err}', 'done': True}, ensure_ascii=False)}\n\n"
+        while True:
+            item = await queue.get()
+            if item is None:
+                break
+            if isinstance(item, Exception):
+                yield f"data: {json.dumps({'content': f'Error: {item}', 'done': True}, ensure_ascii=False)}\n\n"
+                executor.shutdown(wait=False)
                 return
 
-            await save_message(sid, "user", content=req.message)
-            await save_message(sid, "assistant", content=full_output.strip())
-            yield f"data: {json.dumps({'done': True}, ensure_ascii=False)}\n\n"
+            line = item if isinstance(item, str) else str(item)
+            if not in_analysis:
+                clean = ANSI_RE.sub('', line)
+                if ANALYSIS_START.search(clean):
+                    in_analysis = True
+                continue
 
-        except Exception as e:
-            import traceback
-            tb = traceback.format_exc()
-            msg = f"Error: {e}\n{tb[-300:]}"
-            yield f"data: {json.dumps({'content': msg, 'done': True}, ensure_ascii=False)}\n\n"
+            clean = ANSI_RE.sub('', line)
+            if ANALYSIS_END.search(clean):
+                continue
+
+            filtered = _filter_line(line)
+            if filtered is not None:
+                full_output += filtered
+                if "$" in filtered and "curl" in filtered:
+                    yield f'data: {json.dumps({"status": "fetching_data"}, ensure_ascii=False)}\n\n'
+                yield f"data: {json.dumps({'content': filtered}, ensure_ascii=False)}\n\n"
+
+        # Read final signals
+        try:
+            returncode = await queue.get()
+            stderr_text = await queue.get()
+        except Exception:
+            returncode = -1
+            stderr_text = ""
+
+        executor.shutdown(wait=True)
+
+        if returncode != 0:
+            err = stderr_text or f"Hermes exited with code {returncode}"
+            yield f"data: {json.dumps({'content': f'Agent Error: {err}', 'done': True}, ensure_ascii=False)}\n\n"
+            return
+
+        await save_message(sid, "user", content=req.message)
+        await save_message(sid, "assistant", content=full_output.strip())
+        yield f"data: {json.dumps({'done': True}, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 

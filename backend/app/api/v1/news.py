@@ -9,12 +9,63 @@ from app.db.models import StockNews
 router = APIRouter(prefix="/news", tags=["news"])
 
 
-@router.get("/stock/{code}")
-async def get_news(code: str):
+async def _fetch_news_from_llm(code: str):
     today = date.today()
+    prompt = f'搜索 "{code}" 最近3天的重要财经新闻，返回JSON数组，格式: [{{"title":"...","source":"东方财富/雪球/新浪等","url":"...","summary":"一句话摘要"}}]。只返回JSON，不要其他文字。最多5条。'
+
+    try:
+        result = subprocess.run(
+            ["hermes", "chat", "-Q", "-q", prompt, "--max-turns", "1"],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            env={**os.environ, "NO_COLOR": "1"}, timeout=60,
+        )
+        output = result.stdout
+    except subprocess.TimeoutExpired:
+        return {"code": code, "news": [], "cached": False, "error": "News fetch timeout"}, []
+
+    json_match = re.search(r'\[[\s\S]*\]', output)
+    if not json_match:
+        return {"code": code, "news": [], "cached": False}, []
+
+    try:
+        articles = json.loads(json_match.group(0))
+    except json.JSONDecodeError:
+        return {"code": code, "news": [], "cached": False}, []
+
     factory = get_session_factory()
     async with factory() as session:
-        from sqlalchemy import select
+        for a in articles[:5]:
+            session.add(StockNews(
+                stock_code=code, title=a.get("title", ""),
+                source=a.get("source", ""), url=a.get("url", ""),
+                summary=a.get("summary", ""), fetched_at=today,
+            ))
+        await session.commit()
+
+    return {"code": code, "news": [
+        {"title": a.get("title", ""), "source": a.get("source", ""), "url": a.get("url", ""), "summary": a.get("summary", "")}
+        for a in articles[:5]
+    ], "cached": False}, []
+
+
+@router.get("/stock/{code}")
+async def get_news(code: str, refresh: bool = False):
+    from sqlalchemy import select, delete
+    today = date.today()
+    factory = get_session_factory()
+
+    if refresh:
+        async with factory() as session:
+            await session.execute(
+                delete(StockNews).where(
+                    StockNews.stock_code == code,
+                    StockNews.fetched_at == today,
+                )
+            )
+            await session.commit()
+        return (await _fetch_news_from_llm(code))[0]
+
+    async with factory() as session:
         result = await session.execute(
             select(StockNews).where(
                 StockNews.stock_code == code,
@@ -28,41 +79,7 @@ async def get_news(code: str):
                 for n in cached
             ], "cached": True}
 
-    prompt = f'搜索 "{code}" 最近3天的重要财经新闻，返回JSON数组，格式: [{{"title":"...","source":"东方财富/雪球/新浪等","url":"...","summary":"一句话摘要"}}]。只返回JSON，不要其他文字。最多5条。'
-
-    env = {**os.environ, "NO_COLOR": "1"}
-    try:
-        result = subprocess.run(
-            ["hermes", "chat", "-q", prompt],
-            capture_output=True, text=True, encoding="utf-8", errors="replace",
-            env=env, timeout=60,
-        )
-        output = result.stdout
-    except subprocess.TimeoutExpired:
-        return {"code": code, "news": [], "cached": False, "error": "News fetch timeout"}
-
-    json_match = re.search(r'\[[\s\S]*\]', output)
-    if not json_match:
-        return {"code": code, "news": [], "cached": False}
-
-    try:
-        articles = json.loads(json_match.group(0))
-    except json.JSONDecodeError:
-        return {"code": code, "news": [], "cached": False}
-
-    async with factory() as session:
-        for a in articles[:5]:
-            session.add(StockNews(
-                stock_code=code, title=a.get("title", ""),
-                source=a.get("source", ""), url=a.get("url", ""),
-                summary=a.get("summary", ""), fetched_at=today,
-            ))
-        await session.commit()
-
-    return {"code": code, "news": [
-        {"title": a.get("title", ""), "source": a.get("source", ""), "url": a.get("url", ""), "summary": a.get("summary", "")}
-        for a in articles[:5]
-    ], "cached": False}
+    return (await _fetch_news_from_llm(code))[0]
 
 
 class AnalyzeRequest(BaseModel):
@@ -78,17 +95,13 @@ async def analyze_news(code: str, req: AnalyzeRequest):
     async def event_stream():
         env = {**os.environ, "NO_COLOR": "1"}
         proc = subprocess.Popen(
-            ["hermes", "chat", "-q", prompt],
+            ["hermes", "chat", "-Q", "-q", prompt, "--max-turns", "1"],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             env=env, text=True, encoding="utf-8", errors="replace",
         )
-        in_analysis = False
         for line in proc.stdout:
-            if '╭─' in line: in_analysis = True; continue
-            if '╰─' in line: continue
-            if not in_analysis: continue
             clean = line.strip()
-            if clean:
+            if clean and not clean.startswith("session_id:"):
                 yield f"data: {json.dumps({'content': clean + chr(10)}, ensure_ascii=False)}\n\n"
         proc.wait()
         yield f"data: {json.dumps({'done': True}, ensure_ascii=False)}\n\n"

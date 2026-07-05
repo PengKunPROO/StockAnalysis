@@ -50,6 +50,15 @@ All under `/api/v1/` — router tree: `backend/app/api/v1/router.py`. Endpoints:
 - Tools defined in `diagnosis/tools.py` → LLM calls `get_kline`, `get_indicators`, `get_financials`, `get_realtime`, `search_stocks`.
 - Skills: markdown files in `backend/skills/` with YAML frontmatter (`name`, `description`, `mode`).
 
+### News
+- `GET /api/v1/news/stock/{code}` caches results per day. Pass `?refresh=true` to force re-fetch via LLM subprocess.
+- News fetching calls `hermes chat -Q -q --max-turns 1` subprocess (requires `hermes` CLI in PATH).
+- Analysis uses SSE streaming from the same `hermes` subprocess.
+
+## Commit & Push
+- After fixing a bug or adding a feature, commit and push to `origin/main` immediately.
+- Run `pytest tests/ -v --tb=short` (from `backend/`) and `npx tsc --noEmit` (from `frontend/`) before committing.
+
 ## Tests
 - Fixtures in `backend/tests/conftest.py`: `client` (module-scoped `TestClient`), `stock_code` = `"sh.600519"`.
 - Tests requiring `FUYAO_API_KEY` env var are skipped with `@pytest.mark.skipif`.

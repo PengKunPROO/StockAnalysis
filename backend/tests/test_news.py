@@ -10,3 +10,9 @@ def test_news_structure(client, stock_code):
     for item in data.get("news", []):
         assert "title" in item
         assert "source" in item
+
+
+def test_news_refresh_returns_200(client, stock_code):
+    r = client.get(f"/api/v1/news/stock/{stock_code}?refresh=true")
+    assert r.status_code == 200
+    assert "news" in r.json()
