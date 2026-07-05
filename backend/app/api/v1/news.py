@@ -31,17 +31,14 @@ async def get_news(code: str):
     prompt = f'搜索 "{code}" 最近3天的重要财经新闻，返回JSON数组，格式: [{{"title":"...","source":"东方财富/雪球/新浪等","url":"...","summary":"一句话摘要"}}]。只返回JSON，不要其他文字。最多5条。'
 
     env = {**os.environ, "NO_COLOR": "1"}
-    proc = subprocess.Popen(
-        ["hermes", "chat", "-q", prompt],
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-        env=env, text=True, encoding="utf-8", errors="replace",
-    )
-
-    output = proc.stdout.read()
     try:
-        proc.wait(timeout=60)
+        result = subprocess.run(
+            ["hermes", "chat", "-q", prompt],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            env=env, timeout=30,
+        )
+        output = result.stdout
     except subprocess.TimeoutExpired:
-        proc.kill()
         return {"code": code, "news": [], "cached": False, "error": "News fetch timeout"}
 
     json_match = re.search(r'\[[\s\S]*\]', output)

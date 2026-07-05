@@ -31,7 +31,9 @@ async def get_db():
 
 
 async def init_db():
-    from app.db.models import Base
+    from app.db.models import Base, StockNews
     engine = get_engine()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # Ensure new tables created (SQLite doesn't auto-migrate)
+        await conn.run_sync(StockNews.__table__.create, checkfirst=True)
