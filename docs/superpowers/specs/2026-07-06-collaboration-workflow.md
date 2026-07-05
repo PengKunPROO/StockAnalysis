@@ -52,7 +52,7 @@ git worktree remove ../hermes-worktrees/<feature>
 ## 6. 初始目录结构
 
 ```
-D:\AI\hermesStockAgent\           ← main (用户 + opencode)
-D:\AI\hermesStockAgent-hermes\    ← Hermes Agent 工作区
-D:\AI\hermesStockAgent-opencode\  ← OpenCode Agent 工作区
+D:\AI\hermesStockAgent\                    ← main (用户 + opencode)
+D:\AI\hermesStockAgent\.worktrees\hermes\   ← Hermes Agent 工作区
+D:\AI\hermesStockAgent\.worktrees\opencode\ ← OpenCode Agent 工作区
 ```
