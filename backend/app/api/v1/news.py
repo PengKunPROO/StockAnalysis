@@ -46,8 +46,11 @@ async def _fetch_news_akshare(code: str):
         return articles
 
     try:
-        articles = await loop.run_in_executor(None, _fetch)
-    except Exception as e:
+        articles = await asyncio.wait_for(
+            loop.run_in_executor(None, _fetch), timeout=15
+        )
+    except asyncio.TimeoutError:
+        return {"code": code, "news": [], "cached": False, "error": "新闻获取超时，请稍后重试"}, []
         return {"code": code, "news": [], "cached": False, "error": f"新闻获取失败: {e}"}, []
 
     if not articles:
