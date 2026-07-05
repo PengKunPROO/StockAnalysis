@@ -6,7 +6,7 @@ SKILLS_DIR = Path(__file__).parent.parent.parent / "skills"
 
 
 def _parse_frontmatter(content: str) -> dict:
-    match = re.match(r'^---\s*\n(.*?)\n---\s*\n', content, re.DOTALL)
+    match = re.match(r'^---\s*\r?\n(.*?)\r?\n---\s*\r?\n', content, re.DOTALL)
     if not match:
         return {}
     try:
