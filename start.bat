@@ -18,8 +18,8 @@ if not exist "frontend\node_modules\.package-lock.json" (
 )
 
 :: Backend
-echo [1/2] Starting backend on :8002...
-start "StockAgent-BE" cmd /c "cd /d %~dp0backend && .venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8002"
+echo [1/2] Starting backend on :8003...
+start "StockAgent-BE" cmd /c "cd /d %~dp0backend && .venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8003"
 
 :: Wait
 echo Waiting for backend...
@@ -27,7 +27,7 @@ set /a count=0
 :wait_be
 timeout /t 2 /nobreak >NUL
 set /a count+=2
-curl -s http://127.0.0.1:8002/api/v1/health >NUL 2>&1
+curl -s http://127.0.0.1:8003/api/v1/health >NUL 2>&1
 if %errorlevel% neq 0 if %count% lss 40 goto wait_be
 if %count% geq 40 echo WARNING: backend may not be ready
 
@@ -38,7 +38,7 @@ start "StockAgent-FE" cmd /c "cd /d %~dp0frontend && npm run dev"
 timeout /t 3 /nobreak >NUL
 echo.
 echo ========================
-echo   Backend : http://localhost:8002/docs
+echo   Backend : http://localhost:8003/docs
 echo   Frontend: http://localhost:5173
 echo ========================
 echo.

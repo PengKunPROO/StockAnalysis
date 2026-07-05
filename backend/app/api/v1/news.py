@@ -35,7 +35,7 @@ async def get_news(code: str):
         result = subprocess.run(
             ["hermes", "chat", "-q", prompt],
             capture_output=True, text=True, encoding="utf-8", errors="replace",
-            env=env, timeout=30,
+            env=env, timeout=60,
         )
         output = result.stdout
     except subprocess.TimeoutExpired:
