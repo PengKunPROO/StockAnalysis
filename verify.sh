@@ -19,7 +19,8 @@ echo "[3/4] Integrity Checks..."
 cd "$ROOT/frontend/src"
     grep -q "kline-container" index.css || { echo "FAIL: kline-container"; exit 1; }
     grep -q "news-panel" index.css || { echo "FAIL: news-panel"; exit 1; }
-    grep -q "\.right " index.css || { echo "FAIL: right panel"; exit 1; }
+    grep -q "chat-panel" index.css || { echo "FAIL: chat-panel"; exit 1; }
+    grep -q "\.info-cards" index.css || { echo "FAIL: info-cards"; exit 1; }
     grep -q "KlineChart" App.tsx || { echo "FAIL: KlineChart import"; exit 1; }
     grep -q "DiagnosisPanel" App.tsx || { echo "FAIL: DiagnosisPanel import"; exit 1; }
     grep -q "NewsPanel" App.tsx || { echo "FAIL: NewsPanel import"; exit 1; }
