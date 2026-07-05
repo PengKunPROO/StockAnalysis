@@ -17,12 +17,12 @@ npx vite build --logLevel error
 # Integrity checks
 echo "[3/4] Integrity Checks..."
 cd "$ROOT/frontend/src"
-grep -q "kline-container" index.css || { echo "FAIL: kline-container"; exit 1; }
-grep -q "right-panel" index.css || { echo "FAIL: right-panel"; exit 1; }
-grep -q "info-card" index.css || { echo "FAIL: info-card"; exit 1; }
-grep -q "KlineChart" App.tsx || { echo "FAIL: KlineChart import"; exit 1; }
-grep -q "DiagnosisPanel" App.tsx || { echo "FAIL: DiagnosisPanel import"; exit 1; }
-grep -q "InfoCards" App.tsx || { echo "FAIL: InfoCards import"; exit 1; }
+    grep -q "kline-container" index.css || { echo "FAIL: kline-container"; exit 1; }
+    grep -q "news-panel" index.css || { echo "FAIL: news-panel"; exit 1; }
+    grep -q "\.right " index.css || { echo "FAIL: right panel"; exit 1; }
+    grep -q "KlineChart" App.tsx || { echo "FAIL: KlineChart import"; exit 1; }
+    grep -q "DiagnosisPanel" App.tsx || { echo "FAIL: DiagnosisPanel import"; exit 1; }
+    grep -q "NewsPanel" App.tsx || { echo "FAIL: NewsPanel import"; exit 1; }
 echo "  Integrity checks: OK"
 
 # Port consistency

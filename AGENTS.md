@@ -68,7 +68,7 @@ All under `/api/v1/` — router tree: `backend/app/api/v1/router.py`. Endpoints:
 ## Frontend
 - Path alias `@/*` → `./src/*`.
 - Components: `KlineChart`, `InfoCards`, `DiagnosisPanel`, `NewsPanel`, `SearchBar`, `SkillManager`.
-- `verify.sh` does integrity checks that grep for specific CSS classes (`.kline-container`, `.right-panel`, `.info-card`) and component imports in `App.tsx`. If you add/rename components, update `verify.sh`.
+- `verify.sh` does integrity checks that grep for specific CSS classes (`.kline-container`, `.news-panel`, `.right`) and component imports in `App.tsx`. If you add/rename components, update `verify.sh`.
 
 ## Config
 - `pydantic-settings` loads from `.env` (copy `.env.example`).
