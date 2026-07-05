@@ -18,6 +18,8 @@ export default function InfoCards() {
 
   if (!realtime && !financial && !indicators) return null
 
+  const roe = financial?.reports?.[0]?.roe ?? financial?.roe
+  const debtRatio = financial?.reports?.[0]?.debt_ratio ?? financial?.debt_ratio
   const macd = indicators?.data?.[indicators.data.length - 1]?.macd
   const rsi = indicators?.data?.[indicators.data.length - 1]?.rsi
 
@@ -27,8 +29,8 @@ export default function InfoCards() {
     { label: '最高', value: `¥${realtime?.high?.toFixed(2) || '--'}` },
     { label: '最低', value: `¥${realtime?.low?.toFixed(2) || '--'}` },
     { label: '成交量', value: realtime?.volume ? `${(realtime.volume / 10000).toFixed(0)}万` : '--' },
-    { label: 'ROE', value: financial?.roe != null ? `${(financial.roe * 100).toFixed(1)}%` : '--' },
-    { label: '负债率', value: financial?.debt_ratio != null ? `${(financial.debt_ratio * 100).toFixed(1)}%` : '--' },
+    { label: 'ROE', value: roe != null ? `${roe.toFixed(1)}%` : '--' },
+    { label: '负债率', value: debtRatio != null ? `${debtRatio.toFixed(1)}%` : '--' },
     { label: 'MACD', value: macd?.macd != null ? macd.macd.toFixed(2) : '--', color: macd?.macd > 0 ? 'var(--up)' : 'var(--down)' },
     { label: 'RSI(14)', value: rsi?.toFixed ? rsi.toFixed(1) : '--' },
   ]
