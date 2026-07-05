@@ -28,10 +28,21 @@ function Sidebar() {
 }
 
 function TopBar() {
+  const [indices, setIndices] = useState<{name:string;price:number;change_pct:number}[]>([])
+  useEffect(() => {
+    fetch('/api/v1/market/index?codes=sh.000001,sz.399001')
+      .then(r=>r.json()).then(d=>setIndices((d.indices||[]).map((i:any)=>({...i,name:i.code?.startsWith('sh')?'上证':i.code?.startsWith('sz')?'深证':i.code||'--'}))))
+      .catch(()=>{})
+  }, [])
   return (
     <div className="topbar">
       <SearchBar />
-      <div className="idx">上证 <span className="up">3,245.21</span> +0.62% &nbsp; 深证 <span className="dn">10,832.14</span> -0.21%</div>
+      <div className="idx">
+        {indices.map(idx=>{
+          const up = idx.change_pct > 0
+          return <span key={idx.name}>{idx.name} <span className={up?'up':'dn'}>{idx.price?.toFixed(2)||'--'}</span> {up?'+':''}{idx.change_pct?.toFixed(2)||'--'}%</span>
+        })}
+      </div>
     </div>
   )
 }
