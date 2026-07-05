@@ -1,80 +1,40 @@
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-import asyncio, json, subprocess, os, re
+import asyncio, json, subprocess, os
 from datetime import date, datetime
 from app.db.database import get_session_factory
 from app.db.models import StockNews
+from app.engine.data_engine import engine as data_engine
 
 router = APIRouter(prefix="/news", tags=["news"])
 
 
-async def _fetch_news_akshare(code: str):
-    """Fetch news via akshare for A-share stocks. Returns (result_dict, articles_list)."""
+async def _fetch_and_cache_news(code: str, limit: int = 5):
     today = date.today()
-
-    if not code.startswith(("sh.", "sz.")):
-        return {"code": code, "news": [], "cached": False, "error": "仅A股支持新闻获取"}, []
-
-    raw_code = code.split(".", 1)[1]
-    loop = asyncio.get_event_loop()
-
-    def _fetch():
-        import akshare as ak
-        df = ak.stock_news_em(symbol=raw_code)
-        # Column names: 关键词, 新闻标题, 新闻内容, 发布时间, 文章来源, 新闻链接
-        col_title = df.columns[1]
-        col_content = df.columns[2]
-        col_time = df.columns[3]
-        col_source = df.columns[4]
-        col_url = df.columns[5]
-
-        articles = []
-        for _, row in df.head(10).iterrows():
-            title = str(row[col_title])
-            content = str(row[col_content])[:200] if row[col_content] else ""
-            pub_time = str(row[col_time])
-            source = str(row[col_source])
-            url = str(row[col_url])
-
-            articles.append({
-                "title": title,
-                "source": source,
-                "url": url,
-                "summary": content,
-            })
-        return articles
-
-    try:
-        articles = await asyncio.wait_for(
-            loop.run_in_executor(None, _fetch), timeout=15
-        )
-    except asyncio.TimeoutError:
-        return {"code": code, "news": [], "cached": False, "error": "新闻获取超时，请稍后重试"}, []
-    except Exception as e:
-        return {"code": code, "news": [], "cached": False, "error": f"新闻获取失败: {e}"}, []
+    articles, error = await data_engine.get_news(code, limit=10)
 
     if not articles:
-        return {"code": code, "news": [], "cached": False, "error": "暂未找到相关新闻"}, []
+        return {"code": code, "news": [], "cached": False, "error": error or "暂未找到相关新闻"}, []
 
     factory = get_session_factory()
     async with factory() as session:
-        for a in articles[:5]:
+        for a in articles[:limit]:
             session.add(StockNews(
                 stock_code=code, title=a["title"],
                 source=a["source"], url=a["url"],
                 summary=a["summary"], fetched_at=today,
+                published_at=a.get("published_at", ""),
             ))
         await session.commit()
 
     return {"code": code, "news": [
-        {"title": a["title"], "source": a["source"], "url": a["url"], "summary": a["summary"]}
-        for a in articles[:5]
+        a for a in articles[:limit]
     ], "cached": False}, articles
 
 
 @router.get("/stock/{code}")
-async def get_news(code: str, refresh: bool = False):
+async def get_news(code: str, refresh: bool = False, limit: int = 5):
     from sqlalchemy import select, delete
     today = date.today()
     factory = get_session_factory()
@@ -88,7 +48,7 @@ async def get_news(code: str, refresh: bool = False):
                 )
             )
             await session.commit()
-        result, _ = await _fetch_news_akshare(code)
+        result, _ = await _fetch_and_cache_news(code, limit)
         return result
 
     async with factory() as session:
@@ -101,11 +61,15 @@ async def get_news(code: str, refresh: bool = False):
         cached = result.scalars().all()
         if cached:
             return {"code": code, "news": [
-                {"id": n.id, "title": n.title, "source": n.source, "url": n.url, "summary": n.summary}
+                {
+                    "id": n.id, "title": n.title, "source": n.source,
+                    "url": n.url, "summary": n.summary,
+                    "published_at": getattr(n, "published_at", ""),
+                }
                 for n in cached
             ], "cached": True}
 
-    result, _ = await _fetch_news_akshare(code)
+    result, _ = await _fetch_and_cache_news(code, limit)
     return result
 
 
@@ -117,7 +81,11 @@ class AnalyzeRequest(BaseModel):
 
 @router.post("/stock/{code}/analyze")
 async def analyze_news(code: str, req: AnalyzeRequest):
-    prompt = f'分析这条新闻对股票 {code} 的影响。结合技术面和基本面，判断是利好/利空/中性，短期和中期影响。\n\n新闻: {req.title}\n来源: {req.source}\n摘要: {req.summary}\n\n请用中文简要分析，给出影响评级（强利好/利好/中性/利空/强利空）。'
+    prompt = (
+        f'分析这条新闻对股票 {code} 的影响。结合技术面和基本面，判断是利好/利空/中性，短期和中期影响。'
+        f'\n\n新闻: {req.title}\n来源: {req.source}\n摘要: {req.summary}'
+        f'\n\n请用中文简要分析，给出影响评级（强利好/利好/中性/利空/强利空）。'
+    )
 
     async def event_stream():
         env = {**os.environ, "NO_COLOR": "1"}

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useApp } from '../contexts/AppContext'
 
 interface NewsItem {
-  id?: number; title: string; source: string; url?: string; summary?: string
+  id?: number; title: string; source: string; url?: string; summary?: string; published_at?: string
 }
 
 export default function NewsPanel() {
@@ -78,6 +78,7 @@ export default function NewsPanel() {
           <div className="news-item" onClick={() => analyze(item, i)}>
             <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</span>
             <span style={{ color: 'var(--muted)', fontSize: 10, whiteSpace: 'nowrap' }}>{item.source}</span>
+            {item.published_at && <span style={{ color: 'var(--muted)', fontSize: 9, whiteSpace: 'nowrap' }}>{item.published_at.slice(0, 10)}</span>}
           </div>
           {analyzing === i && (
             <div className="news-analysis">

@@ -98,5 +98,6 @@ class StockNews(Base):
     source = Column(String(100))
     url = Column(Text)
     summary = Column(Text)
+    published_at = Column(String(50))
     fetched_at = Column(Date, nullable=False)
     __table_args__ = (UniqueConstraint('stock_code', 'title', 'fetched_at'),)

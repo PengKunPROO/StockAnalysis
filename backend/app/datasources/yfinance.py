@@ -2,7 +2,7 @@
 from datetime import datetime
 import yfinance as yf
 from app.datasources.base import (
-    DataSourceProtocol, KlineBar, RealtimeQuote, StockInfo, FinancialReport,
+    DataSourceProtocol, KlineBar, RealtimeQuote, StockInfo, FinancialReport, NewsArticle,
 )
 
 
@@ -163,6 +163,30 @@ class USStockSource:
                 )
             except Exception:
                 return None
+
+        return await loop.run_in_executor(None, _fetch)
+
+    async def fetch_news(self, code: str, limit: int = 10) -> list[NewsArticle]:
+        import asyncio
+        loop = asyncio.get_event_loop()
+        ticker_symbol = code.split(".", 1)[1]
+
+        def _fetch():
+            try:
+                ticker = yf.Ticker(ticker_symbol)
+                raw_news = ticker.news or []
+                articles = []
+                for item in raw_news[:limit]:
+                    articles.append(NewsArticle(
+                        title=item.get("title", ""),
+                        source=item.get("publisher", ""),
+                        url=item.get("link", ""),
+                        summary=item.get("summary", "")[:500],
+                        published_at=str(item.get("providerPublishTime", "")),
+                    ))
+                return articles
+            except Exception:
+                return []
 
         return await loop.run_in_executor(None, _fetch)
 

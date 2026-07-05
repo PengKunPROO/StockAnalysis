@@ -76,6 +76,21 @@ TOOL_DEFINITIONS = [
             }
         }
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_news",
+            "description": "获取股票最新财经新闻，包含标题、摘要、来源、发布时间。用于分析近期事件对股价的潜在影响、判断利好利空。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "code": {"type": "string", "description": "股票代码"},
+                    "limit": {"type": "integer", "description": "返回条数，默认5"}
+                },
+                "required": ["code"]
+            }
+        }
+    },
 ]
 
 
@@ -116,5 +131,11 @@ async def execute_tool(name: str, args: dict) -> str:
         keyword = args["keyword"]
         results, _ = await engine.search(keyword)
         return json.dumps(results[:5], ensure_ascii=False)
+
+    elif name == "get_news":
+        code = args["code"]
+        limit = args.get("limit", 5)
+        news, _ = await engine.get_news(code, limit)
+        return json.dumps(news, ensure_ascii=False)
 
     return json.dumps({"error": f"Unknown tool: {name}"})

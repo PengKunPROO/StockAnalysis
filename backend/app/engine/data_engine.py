@@ -141,6 +141,26 @@ class DataEngine:
 
         return all_results[:20], None
 
+    async def get_news(self, code: str, limit: int = 5) -> tuple[list[dict], str | None]:
+        market = self._market_from_code(code)
+        source = get_source_for_market(market)
+        if source is None:
+            return [], f"No datasource for market: {market}"
+
+        try:
+            articles = await source.fetch_news(code, limit)
+            return [
+                {
+                    "title": a.title, "source": a.source,
+                    "url": a.url, "summary": a.summary,
+                    "published_at": a.published_at,
+                }
+                for a in articles
+            ], None
+        except Exception as e:
+            logger.error(f"Failed to fetch news for {code}: {e}")
+            return [], f"News source temporarily unavailable"
+
     async def health(self) -> dict:
         healthy = get_healthy_sources()
         factory = get_session_factory()

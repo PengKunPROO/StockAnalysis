@@ -35,5 +35,11 @@ async def init_db():
     engine = get_engine()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-        # Ensure new tables created (SQLite doesn't auto-migrate)
+        # Ensure new tables/columns created (SQLite doesn't auto-migrate)
         await conn.run_sync(StockNews.__table__.create, checkfirst=True)
+        # Add published_at column if missing (migration for existing DBs)
+        from sqlalchemy import text as _text
+        try:
+            await conn.execute(_text("ALTER TABLE stock_news ADD COLUMN published_at VARCHAR(50)"))
+        except Exception:
+            pass  # Column already exists

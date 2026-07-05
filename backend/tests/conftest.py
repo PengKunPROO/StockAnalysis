@@ -13,7 +13,12 @@ needs_api_key = pytest.mark.skipif(
 
 @pytest.fixture(scope="module")
 def client():
+    import asyncio
     from app.main import app
+    from app.db.database import init_db
+    loop = asyncio.new_event_loop()
+    loop.run_until_complete(init_db())
+    loop.close()
     return TestClient(app)
 
 

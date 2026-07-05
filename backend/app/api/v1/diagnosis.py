@@ -93,6 +93,7 @@ async def chat(req: ChatRequest):
 - 实时: curl -s --max-time 15 "http://localhost:8002/api/v1/stock/<代码>/realtime"
 - 财务: curl -s --max-time 15 "http://localhost:8002/api/v1/stock/<代码>/financial"
 - 指标: curl -s --max-time 15 "http://localhost:8002/api/v1/stock/<代码>/indicators?days=60"
+- 新闻: curl -s --max-time 15 "http://localhost:8002/api/v1/news/stock/<代码>"
 
 ## 当前标的: {stock_list}
 

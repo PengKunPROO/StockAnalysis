@@ -1,7 +1,7 @@
 """Sample data source for development when external APIs are unreachable."""
 import random
 from datetime import date, timedelta
-from app.datasources.base import DataSourceProtocol, KlineBar, RealtimeQuote, StockInfo, FinancialReport
+from app.datasources.base import DataSourceProtocol, KlineBar, RealtimeQuote, StockInfo, FinancialReport, NewsArticle
 
 
 def _generate_klines(code: str, start: str, end: str) -> list[KlineBar]:
@@ -108,6 +108,38 @@ class SampleSource:
 
     async def fetch_index(self, code: str) -> RealtimeQuote | None:
         return await self.fetch_realtime(code)
+
+    async def fetch_news(self, code: str, limit: int = 10) -> list[NewsArticle]:
+        import asyncio
+        loop = asyncio.get_event_loop()
+
+        def _gen():
+            today = date.today().isoformat()
+            return [
+                NewsArticle(
+                    title=f"{code} 发布2026年Q2财报，营收超预期",
+                    source="证券时报",
+                    url="https://example.com/news/1",
+                    summary="公司Q2营收同比增长15%，净利润增长22%，超出市场预期。分析师上调目标价。",
+                    published_at=f"{today} 10:30:00",
+                ),
+                NewsArticle(
+                    title=f"{code} 获外资机构大幅增持",
+                    source="东方财富",
+                    url="https://example.com/news/2",
+                    summary="北向资金连续5日净买入，累计增持金额超10亿元。",
+                    published_at=f"{today} 09:15:00",
+                ),
+                NewsArticle(
+                    title=f"{code} 股价盘中异动，成交量放大",
+                    source="新浪财经",
+                    url="https://example.com/news/3",
+                    summary="今日开盘后股价快速拉升3%，成交额较前日放大50%。",
+                    published_at=f"{today} 11:00:00",
+                ),
+            ][:limit]
+
+        return await loop.run_in_executor(None, _gen)
 
     def health_check(self) -> bool:
         return True

@@ -3,7 +3,7 @@ from datetime import datetime, date, timezone, timedelta
 import httpx
 from app.config import settings
 from app.datasources.base import (
-    DataSourceProtocol, KlineBar, RealtimeQuote, StockInfo, FinancialReport,
+    DataSourceProtocol, KlineBar, RealtimeQuote, StockInfo, FinancialReport, NewsArticle,
 )
 
 BASE_URL = "https://fuyao.aicubes.cn"
@@ -192,6 +192,9 @@ class TonghuashunSource:
             return await self.fetch_realtime(code)
         except Exception:
             return None
+
+    async def fetch_news(self, code: str, limit: int = 10) -> list:
+        return []
 
     def health_check(self) -> bool:
         return bool(self._get_key())

@@ -70,17 +70,27 @@ def start_scheduler():
 
 
 async def cleanup_old_data():
-    """Remove kline data older than 1 year to save space."""
+    """Remove kline data older than 1 year and news older than 30 days."""
     factory = get_session_factory()
     async with factory() as session:
         from sqlalchemy import delete
         from datetime import date, timedelta
-        cutoff = date.today() - timedelta(days=365)
-        from app.db.models import DailyKline
+        from app.db.models import DailyKline, StockNews
+
+        cutoff_kline = date.today() - timedelta(days=365)
         result = await session.execute(
-            delete(DailyKline).where(DailyKline.trade_date < cutoff)
+            delete(DailyKline).where(DailyKline.trade_date < cutoff_kline)
         )
         deleted = result.rowcount
+
+        cutoff_news = date.today() - timedelta(days=30)
+        result_news = await session.execute(
+            delete(StockNews).where(StockNews.fetched_at < cutoff_news)
+        )
+        deleted_news = result_news.rowcount
+
         await session.commit()
         if deleted:
-            logger.info(f"Cleaned up {deleted} old kline records (before {cutoff})")
+            logger.info(f"Cleaned up {deleted} old kline records (before {cutoff_kline})")
+        if deleted_news:
+            logger.info(f"Cleaned up {deleted_news} old news records (before {cutoff_news})")

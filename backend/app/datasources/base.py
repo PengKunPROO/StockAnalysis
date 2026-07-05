@@ -51,6 +51,16 @@ class FinancialReport:
     total_equity: float | None = None
 
 
+@dataclass
+class NewsArticle:
+    """Single news article."""
+    title: str
+    source: str
+    url: str
+    summary: str
+    published_at: str       # ISO 8601 or date string
+
+
 @runtime_checkable
 class DataSourceProtocol(Protocol):
     """Interface every datasource plugin must satisfy."""
@@ -72,5 +82,7 @@ class DataSourceProtocol(Protocol):
     async def fetch_financials(self, code: str) -> FinancialReport | None: ...
 
     async def fetch_index(self, code: str) -> RealtimeQuote | None: ...
+
+    async def fetch_news(self, code: str, limit: int = 10) -> list[NewsArticle]: ...
 
     def health_check(self) -> bool: ...
