@@ -208,7 +208,10 @@ a:hover { text-decoration: underline; }
 .search-dropdown { position: absolute; top: 100%; left: 0; right: 0; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; max-height: 280px; overflow-y: auto; z-index: 100; margin-top: 4px; box-shadow: 0 8px 24px rgba(0,0,0,.3); }
 .search-dropdown .item { padding: 8px 12px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; transition: background .1s; }
 .search-dropdown .item:hover { background: var(--accent-glow); }
+.search-dropdown .item.active { background: var(--accent-glow); border-left: 2px solid var(--accent); padding-left: 10px; }
 .search-dropdown .item .code { color: var(--muted); font-size: 0.7rem; font-family: var(--font-mono); }
+.search-spinner { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .6s linear infinite; }
+@keyframes spin { to { transform: translateY(-50%) rotate(360deg); } }
 
 /* === Responsive === */
 @media (max-width: 1200px) {
