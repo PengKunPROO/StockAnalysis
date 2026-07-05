@@ -15,9 +15,9 @@ async def _fetch_news_from_llm(code: str):
 
     try:
         result = subprocess.run(
-            ["hermes", "chat", "-Q", "-q", prompt, "--max-turns", "1"],
+            ["hermes", "chat", "-Q", "-q", prompt, "--max-turns", "5"],
             capture_output=True, text=True, encoding="utf-8", errors="replace",
-            env={**os.environ, "NO_COLOR": "1"}, timeout=60,
+            env={**os.environ, "NO_COLOR": "1"}, timeout=120,
         )
         output = result.stdout
     except subprocess.TimeoutExpired:
