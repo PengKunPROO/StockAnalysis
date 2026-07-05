@@ -2,6 +2,15 @@
 import re
 from pathlib import Path
 
+# Finance-relevant keywords for skill filtering
+FINANCE_KEYWORDS = ['股票', '金融', '投资', 'A股', '财报', '估值', 'ESG', '红利', '分红',
+    '市场', '交易', '技术分析', '基本面', '量化', '基金', '证券', '股息', '因子']
+
+def _is_finance_skill(name: str, description: str) -> bool:
+    text = name + description
+    return any(kw in text for kw in FINANCE_KEYWORDS)
+
+
 SKILLS_DIR = Path(__file__).parent.parent.parent / "skills"
 
 
@@ -23,9 +32,13 @@ def list_skills() -> list[dict]:
     for f in sorted(SKILLS_DIR.glob("*.md")):
         content = f.read_text(encoding="utf-8")
         meta = _parse_frontmatter(content)
+        name = meta.get("name", f.stem)
+        desc = meta.get("description", "")
+        if not _is_finance_skill(name, desc):
+            continue
         skills.append({
-            "name": meta.get("name", f.stem),
-            "description": meta.get("description", ""),
+            "name": name,
+            "description": desc,
             "mode": meta.get("mode", "general"),
             "filename": f.name,
         })
