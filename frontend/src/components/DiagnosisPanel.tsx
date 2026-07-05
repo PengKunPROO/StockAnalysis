@@ -4,17 +4,38 @@ import { chatStream } from '../api/diagnosis'
 import type { ChatMessage as ChatMsg } from '../types'
 
 function renderMd(text: string): string {
-  return text
+  let html = text
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/^### (.+)$/gm, '<h4>$1</h4>').replace(/^## (.+)$/gm, '<h3>$1</h3>').replace(/^# (.+)$/gm, '<h2>$1</h2>')
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/`([^`]+)`/g, '<code>$1</code>')
-    .replace(/^\|[-:\s|]+\|$/gm, '')
-    .replace(/^\|(.+)\|$/gm, (_, c) => '<tr>' + c.split('|').map((x: string) => `<td>${x.trim()}</td>`).join('') + '</tr>')
-    .replace(/((?:<tr>.*<\/tr>\n?)+)/g, '<table>$1</table>')
-    .replace(/^- (.+)$/gm, '<li>$1</li>').replace(/((?:<li>.*<\/li>\n?)+)/g, '<ul>$1</ul>')
-    .replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>')
-    .replace(/\n/g, '<br/>')
+
+  // Tables: process before newline replacement
+  html = html.replace(/(^\|.+\|$\n?)+/gm, (block: string) => {
+    const rows = block.trim().split('\n').filter((r: string) => r.includes('|'))
+    if (rows.length < 2) return block
+    const cells = (r: string) => r.split('|').filter((_,i,a) => i>0 && i<a.length-1).map((c: string) => c.trim())
+    const sep = rows[1]
+    if (!sep || !/^[\|\s\-:]+$/.test(sep.replace(/\|/g, '').trim())) return block
+    const align: string[] = []
+    sep.split('|').filter(c => c).forEach(c => {
+      align.push(c.includes(':') ? (c.startsWith(':') && c.endsWith(':') ? 'center' : c.startsWith(':') ? 'right' : 'left') : 'left')
+    })
+    const thead = `<tr>${cells(rows[0]).map(c => `<th>${c}</th>`).join('')}</tr>`
+    const tbody = rows.slice(2).map(r => `<tr>${cells(r).map(c => `<td>${c}</td>`).join('')}</tr>`).join('')
+    return `<table>${thead}${tbody}</table>`
+  })
+
+  // Headers
+  html = html.replace(/^### (.+)$/gm, '<h4>$1</h4>').replace(/^## (.+)$/gm, '<h3>$1</h3>').replace(/^# (.+)$/gm, '<h2>$1</h2>')
+
+  // Bold, code, lists, blockquote
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+  html = html.replace(/`([^`]+)`/g, '<code>$1</code>')
+  html = html.replace(/^- (.+)$/gm, '<li>$1</li>')
+  html = html.replace(/((?:<li>.*<\/li>\n?)+)/g, '<ul>$1</ul>')
+  html = html.replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>')
+
+  // Newlines last (but not inside HTML blocks)
+  html = html.replace(/\n/g, '<br/>')
+  return html
 }
 
 function MsgBubble({ msg }: { msg: ChatMsg }) {

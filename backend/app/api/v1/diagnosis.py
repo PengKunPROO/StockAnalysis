@@ -32,6 +32,8 @@ SKIP_PATTERNS = [
     r'^mode:',
     r'^---',
     r'^hermes --resume',
+    r'^\s*┊\s',     # Agent process lines: "┊ 📚 preparing", "┊ 💻 $ curl"
+    r'^\s*$',        # Blank lines
 ]
 from app.diagnosis.sessions import (
     create_session, add_stock_to_session, get_session_stocks,
