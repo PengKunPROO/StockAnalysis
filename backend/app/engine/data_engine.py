@@ -1,4 +1,5 @@
 """Data Engine: cache-first fetch orchestration."""
+import asyncio
 import logging
 from datetime import date, timedelta
 from app.db.database import get_session_factory
@@ -19,8 +20,6 @@ class DataEngine:
             cached = await queries.get_daily_klines(session, code, start, end)
             if cached and len(cached) > 0:
                 # For daily data, verify cache spans the requested range.
-                # The earliest cached date should be within 5 days of the
-                # requested start (weekends/gaps are acceptable).
                 if period == "daily":
                     first_cached = cached[0]["date"]
                     try:
@@ -36,12 +35,14 @@ class DataEngine:
             market = self._market_from_code(code)
             source = get_source_for_market(market)
             if source is None:
-                return [], f"No datasource for market: {market}"
+                return cached or [], f"No datasource for market: {market}"
 
             try:
-                bars = await source.fetch_kline(code, period, start, end)
+                bars = await asyncio.wait_for(
+                    source.fetch_kline(code, period, start, end), timeout=20
+                )
                 if not bars:
-                    return [], None
+                    return cached or [], None
 
                 bar_dicts = [
                     {
@@ -62,8 +63,10 @@ class DataEngine:
                     }
                     for b in bars
                 ], None
-            except Exception as e:
+            except (asyncio.TimeoutError, Exception) as e:
                 logger.error(f"Failed to fetch klines for {code}: {e}")
+                if cached:
+                    return cached, f"Data source timeout, showing partial cache"
                 return [], f"Data source temporarily unavailable for {code}"
 
     async def get_realtime(self, code: str) -> tuple[dict | None, str | None]:
