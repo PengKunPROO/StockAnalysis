@@ -65,6 +65,18 @@ async def get_daily_klines(session, code: str, start: str, end: str) -> list[dic
     ]
 
 
+async def get_kline_range(session, code: str) -> tuple:
+    """Return (min_date, max_date, count) for cached klines."""
+    result = await session.execute(
+        select(
+            func.min(DailyKline.trade_date),
+            func.max(DailyKline.trade_date),
+            func.count(DailyKline.trade_date),
+        ).where(DailyKline.code == code)
+    )
+    return result.one()
+
+
 async def get_max_trade_date(session, code: str) -> date | None:
     result = await session.execute(
         select(func.max(DailyKline.trade_date)).where(DailyKline.code == code)

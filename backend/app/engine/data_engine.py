@@ -1,6 +1,6 @@
 """Data Engine: cache-first fetch orchestration."""
 import logging
-from datetime import date
+from datetime import date, timedelta
 from app.db.database import get_session_factory
 from app.db import queries
 from app.datasources import get_source_for_market, get_healthy_sources, get_sources
@@ -18,7 +18,20 @@ class DataEngine:
         async with factory() as session:
             cached = await queries.get_daily_klines(session, code, start, end)
             if cached and len(cached) > 0:
-                return cached, None
+                # For daily data, verify cache spans the requested range.
+                # The earliest cached date should be within 5 days of the
+                # requested start (weekends/gaps are acceptable).
+                if period == "daily":
+                    first_cached = cached[0]["date"]
+                    try:
+                        start_d = date.fromisoformat(start)
+                        first_d = date.fromisoformat(first_cached)
+                        if first_d <= start_d + timedelta(days=5):
+                            return cached, None
+                    except (ValueError, TypeError):
+                        pass
+                else:
+                    return cached, None
 
             market = self._market_from_code(code)
             source = get_source_for_market(market)
