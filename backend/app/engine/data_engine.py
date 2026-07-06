@@ -4,7 +4,7 @@ import logging
 from datetime import date, timedelta
 from app.db.database import get_session_factory
 from app.db import queries
-from app.datasources import get_source_for_market, get_healthy_sources, get_sources
+from app.datasources import get_source_for_market, get_all_sources_for_market, get_healthy_sources, get_sources
 
 logger = logging.getLogger(__name__)
 
@@ -33,41 +33,43 @@ class DataEngine:
                     return cached, None
 
             market = self._market_from_code(code)
-            source = get_source_for_market(market)
-            if source is None:
+            sources = get_all_sources_for_market(market)
+            if not sources:
                 return cached or [], f"No datasource for market: {market}"
 
-            try:
-                bars = await asyncio.wait_for(
-                    source.fetch_kline(code, period, start, end), timeout=20
-                )
-                if not bars:
-                    return cached or [], None
+            bars = []
+            for source in sources:
+                try:
+                    bars = await asyncio.wait_for(
+                        source.fetch_kline(code, period, start, end), timeout=20
+                    )
+                    if bars:
+                        break
+                except (asyncio.TimeoutError, Exception) as e:
+                    logger.warning(f"Kline fetch failed via {source.name} for {code}: {e}")
 
-                bar_dicts = [
-                    {
-                        "trade_date": date.fromisoformat(b.date),
-                        "open": b.open, "high": b.high, "low": b.low,
-                        "close": b.close, "volume": b.volume, "amount": b.amount,
-                    }
-                    for b in bars
-                ]
-                await queries.upsert_daily_klines(session, code, bar_dicts)
-                await session.commit()
+            if not bars:
+                return cached or [], "Data source temporarily unavailable"
 
-                return [
-                    {
-                        "date": b.date,
-                        "open": b.open, "high": b.high, "low": b.low,
-                        "close": b.close, "volume": b.volume, "amount": b.amount,
-                    }
-                    for b in bars
-                ], None
-            except (asyncio.TimeoutError, Exception) as e:
-                logger.error(f"Failed to fetch klines for {code}: {e}")
-                if cached:
-                    return cached, f"Data source timeout, showing partial cache"
-                return [], f"Data source temporarily unavailable for {code}"
+            bar_dicts = [
+                {
+                    "trade_date": date.fromisoformat(b.date),
+                    "open": b.open, "high": b.high, "low": b.low,
+                    "close": b.close, "volume": b.volume, "amount": b.amount,
+                }
+                for b in bars
+            ]
+            await queries.upsert_daily_klines(session, code, bar_dicts)
+            await session.commit()
+
+            return [
+                {
+                    "date": b.date,
+                    "open": b.open, "high": b.high, "low": b.low,
+                    "close": b.close, "volume": b.volume, "amount": b.amount,
+                }
+                for b in bars
+            ], None
 
     async def get_realtime(self, code: str) -> tuple[dict | None, str | None]:
         market = self._market_from_code(code)
