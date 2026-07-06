@@ -92,13 +92,21 @@ class TonghuashunSource:
         try:
             ths = self._to_ths_code(code)
             interval_map = {"daily": "1d", "weekly": "1w", "monthly": "1m"}
-            data = await self._get("/api/a-share/prices/historical", {
-                "thscode": ths,
-                "interval": interval_map.get(period, "1d"),
-                "start": _date_to_ms(start),
-                "end": _date_to_ms(end),
-            })
-            items = data.get("item", [])
+            all_items = []
+            offset = 0
+            while True:
+                data = await self._get("/api/a-share/prices/historical", {
+                    "thscode": ths,
+                    "interval": interval_map.get(period, "1d"),
+                    "start": _date_to_ms(start),
+                    "end": _date_to_ms(end),
+                    "offset": offset,
+                })
+                items = data.get("item", [])
+                all_items.extend(items)
+                offset += len(items)
+                if len(items) == 0:
+                    break
             return [
                 KlineBar(
                     date=_ms_to_date(int(b["date_ms"])),
@@ -109,7 +117,7 @@ class TonghuashunSource:
                     volume=int(float(b.get("volume", 0))),
                     amount=float(b.get("turnover", 0)),
                 )
-                for b in items
+                for b in all_items
             ]
         except Exception:
             return []
