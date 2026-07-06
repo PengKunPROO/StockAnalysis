@@ -14,6 +14,7 @@ class Stock(Base):
     name = Column(String(100), nullable=False)
     market = Column(String(10), nullable=False)
     industry = Column(String(50))
+    group_name = Column(String(50), default="默认分组")
     list_date = Column(Date)
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 

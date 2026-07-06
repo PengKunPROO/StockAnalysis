@@ -57,6 +57,9 @@ a:hover { text-decoration: underline; }
 .sidebar-item.selected { background: var(--accent-glow); border-left: 3px solid var(--accent); padding-left: 9px; }
 .sidebar-item .name { color: var(--heading); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sidebar-item .code { color: var(--muted); font-size: 0.7rem; }
+
+.sidebar-item .del { display:none; color:var(--up); font-size:0.9rem; margin-left:4px; cursor:pointer; }
+.sidebar-item:hover .del { display:inline; }
 .sidebar-footer { padding: 8px 12px; border-top: 1px solid var(--border); }
 .sidebar-footer button { width: 100%; padding: 6px; border-radius: 6px; border: 1px dashed var(--border); background: transparent; color: var(--muted); font-size: 0.75rem; cursor: pointer; transition: .2s; }
 .sidebar-footer button:hover { border-color: var(--accent); color: var(--accent); }

@@ -11,8 +11,33 @@ import SkillManager from './components/SkillManager'
 
 function Sidebar() {
   const { state, dispatch } = useApp()
-  const [tab, setTab] = useState('all')
-  const filter = tab === 'all' ? state.watchlist : tab === 'sh' ? state.watchlist.filter(s => s.code?.startsWith('sh.')) : state.watchlist.filter(s => s.code?.startsWith('sz.'))
+  const [groups, setGroups] = useState<string[]>(['默认分组'])
+  const [activeGroup, setActiveGroup] = useState('默认分组')
+  const [newGroup, setNewGroup] = useState('')
+
+  useEffect(() => {
+    fetch('/api/v1/watchlist/groups').then(r => r.json()).then(d => {
+      setGroups(d.groups?.length ? d.groups : ['默认分组'])
+    }).catch(() => {})
+  }, [state.watchlist])
+
+  const deleteStock = async (code: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    await fetch(`/api/v1/watchlist/${code}`, { method: 'DELETE' })
+    dispatch({ type: 'SET_WATCHLIST', watchlist: state.watchlist.filter(s => s.code !== code) })
+  }
+
+  const addGroup = () => {
+    const name = newGroup.trim()
+    if (name && !groups.includes(name)) {
+      setGroups([...groups, name])
+      setActiveGroup(name)
+      setNewGroup('')
+    }
+  }
+
+  const displayList = activeGroup === '默认分组' ? state.watchlist : state.watchlist.filter(s => s.group_name === activeGroup)
+
   return (
     <div className="sidebar">
       <div className="sidebar-header">
@@ -20,21 +45,26 @@ function Sidebar() {
         <span className="count">{state.watchlist.length}</span>
       </div>
       <div className="sidebar-tabs">
-        {['all', 'sh', 'sz'].map(t => (
-          <span key={t} className={tab === t ? 'active' : ''} onClick={() => setTab(t)}>
-            {t === 'all' ? '全部' : t === 'sh' ? '沪市' : '深市'}
-          </span>
-        ))}
+        <select value={activeGroup} onChange={e => setActiveGroup(e.target.value)}
+          style={{ flex: 1, background: 'var(--surface2)', border: '1px solid var(--border)', color: 'var(--heading)', fontSize: '0.75rem', padding: '2px 4px', borderRadius: 4 }}>
+          {groups.map(g => <option key={g} value={g}>{g}</option>)}
+        </select>
+        <span style={{ display: 'flex', gap: 4 }}>
+          <input value={newGroup} onChange={e => setNewGroup(e.target.value)} onKeyDown={e => e.key === 'Enter' && addGroup()}
+            placeholder="新分组" style={{ width: 60, background: 'var(--surface2)', border: '1px solid var(--border)', color: 'var(--heading)', fontSize: '0.7rem', padding: '2px 4px', borderRadius: 4 }} />
+          <button onClick={addGroup} title="添加分组" style={{ background: 'none', border: '1px solid var(--border)', color: 'var(--accent)', cursor: 'pointer', borderRadius: 4, padding: '2px 6px', fontSize: '0.7rem' }}>+</button>
+        </span>
       </div>
       <div className="sidebar-list">
-        {filter.map(s => (
+        {displayList.map(s => (
           <div key={s.code} className={`sidebar-item ${state.currentStock?.code === s.code ? 'selected' : ''}`}
             onClick={() => dispatch({ type: 'SET_STOCK', stock: { code: s.code, name: s.name, market: s.market, industry: '' } })}>
             <span className="name">{s.name}</span>
             <span className="code">{s.code?.replace('sh.', '').replace('sz.', '')}</span>
+            <span className="del" onClick={e => deleteStock(s.code, e)} title="删除自选">×</span>
           </div>
         ))}
-        {filter.length === 0 && <div style={{ padding: 20, textAlign: 'center', color: 'var(--muted)', fontSize: '0.75rem' }}>搜索股票添加</div>}
+        {displayList.length === 0 && <div style={{ padding: 20, textAlign: 'center', color: 'var(--muted)', fontSize: '0.75rem' }}>搜索股票添加</div>}
       </div>
       <div className="sidebar-footer">
         <button onClick={() => document.querySelector<HTMLInputElement>('.topbar .search-wrap input')?.focus()}>+ 添加自选</button>

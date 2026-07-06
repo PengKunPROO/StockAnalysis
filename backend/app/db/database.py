@@ -43,3 +43,8 @@ async def init_db():
             await conn.execute(_text("ALTER TABLE stock_news ADD COLUMN published_at VARCHAR(50)"))
         except Exception:
             pass  # Column already exists
+        # Add group_name to stocks
+        try:
+            await conn.execute(_text("ALTER TABLE stocks ADD COLUMN group_name VARCHAR(50) DEFAULT '默认分组'"))
+        except Exception:
+            pass
