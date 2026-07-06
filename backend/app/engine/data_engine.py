@@ -22,10 +22,17 @@ class DataEngine:
                 # For daily data, verify cache spans the requested range.
                 if period == "daily":
                     first_cached = cached[0]["date"]
+                    last_cached = cached[-1]["date"]
                     try:
                         start_d = date.fromisoformat(start)
+                        end_d = date.fromisoformat(end)
                         first_d = date.fromisoformat(first_cached)
-                        if first_d <= start_d + timedelta(days=5):
+                        last_d = date.fromisoformat(last_cached)
+                        # Cache is valid only if it covers both start and end of the requested range.
+                        # Allow 3-trading-day tolerance for the end date (weekends/holidays).
+                        start_ok = first_d <= start_d + timedelta(days=5)
+                        end_ok = last_d >= end_d - timedelta(days=3)
+                        if start_ok and end_ok:
                             return cached, None
                     except (ValueError, TypeError):
                         pass
