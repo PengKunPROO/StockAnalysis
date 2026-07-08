@@ -11,6 +11,7 @@ import NewsPanel from './components/NewsPanel'
 import SkillManager from './components/SkillManager'
 import TopTabBar from './components/TopTabBar'
 import SignalsPanel from './components/SignalsPanel'
+import ScreenerView from './components/ScreenerView'
 
 function Sidebar() {
   const { state, dispatch } = useApp()
@@ -180,7 +181,7 @@ function AppShell() {
               <span style={{ fontSize: '0.7rem', color: 'var(--muted)' }}>支持 A股（sh.600519 / sz.000001）和美股（us.AAPL）</span>
             </div>
           ))}
-          {state.activeView === 'screener' && <PlaceholderView title="🔍" desc="选股器" />}
+          {state.activeView === 'screener' && <ScreenerView />}
           {state.activeView === 'intel' && <PlaceholderView title="🌐" desc="市场情报" />}
         </div>
         <StatusBar />
