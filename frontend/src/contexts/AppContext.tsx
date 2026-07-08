@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react'
-import type { StockInfo, SkillMeta, DiagnosisSession, WatchlistItem } from '../types'
+import type { StockInfo, SkillMeta, DiagnosisSession, WatchlistItem, SignalsPayload } from '../types'
 
 const STORAGE_KEY = 'stockagent_state'
 
@@ -12,6 +12,7 @@ interface AppState {
   watchlist: WatchlistItem[]
   skillManagerOpen: boolean
   activeView: AppView
+  signals: SignalsPayload | null
 }
 
 function loadState(): Partial<AppState> {
@@ -38,6 +39,7 @@ const initialState: AppState = {
   watchlist: loadState().watchlist || [],
   skillManagerOpen: false,
   activeView: 'stock',
+  signals: null,
 }
 
 type Action =
@@ -47,15 +49,17 @@ type Action =
   | { type: 'SET_WATCHLIST'; watchlist: WatchlistItem[] }
   | { type: 'TOGGLE_SKILL_MANAGER'; open?: boolean }
   | { type: 'SET_VIEW'; view: AppView }
+  | { type: 'SET_SIGNALS'; signals: SignalsPayload | null }
 
 function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
-    case 'SET_STOCK': return { ...state, currentStock: action.stock }
+    case 'SET_STOCK': return { ...state, currentStock: action.stock, signals: null }
     case 'SET_SKILLS': return { ...state, skills: action.skills }
     case 'SET_SESSIONS': return { ...state, sessions: action.sessions }
     case 'SET_WATCHLIST': return { ...state, watchlist: action.watchlist }
     case 'TOGGLE_SKILL_MANAGER': return { ...state, skillManagerOpen: action.open ?? !state.skillManagerOpen }
     case 'SET_VIEW': return { ...state, activeView: action.view }
+    case 'SET_SIGNALS': return { ...state, signals: action.signals }
     default: return state
   }
 }

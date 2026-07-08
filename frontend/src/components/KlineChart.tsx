@@ -13,7 +13,9 @@ export default function KlineChart() {
   const candleRef = useRef<any>(null)
   const volRef = useRef<any>(null)
   const reqIdRef = useRef(0)
+  const priceLinesRef = useRef<any[]>([])
   const [loading, setLoading] = useState(false)
+  const [showLevels, setShowLevels] = useState(true)
 
   // Create chart once on mount — never destroy on stock switch
   useEffect(() => {
@@ -91,12 +93,43 @@ export default function KlineChart() {
     load()
   }
 
+  // Draw support/resistance/fibonacci price lines from signals
+  useEffect(() => {
+    const series = candleRef.current
+    if (!series) return
+    // clear existing
+    for (const pl of priceLinesRef.current) {
+      try { series.removePriceLine(pl) } catch {}
+    }
+    priceLinesRef.current = []
+    if (!showLevels) return
+    const levels = state.signals?.key_levels || []
+    const colorFor = (type: string) =>
+      type === '阻力' ? '#22c55e' : type === '斐波' ? '#f59e0b' : '#ef4444'
+    for (const lvl of levels.slice(0, 6)) {
+      try {
+        const pl = series.createPriceLine({
+          price: lvl.price,
+          color: colorFor(lvl.type),
+          lineWidth: 1,
+          lineStyle: 2,
+          axisLabelVisible: true,
+          title: lvl.type,
+        })
+        priceLinesRef.current.push(pl)
+      } catch {}
+    }
+  }, [state.signals, showLevels])
+
   return (
     <div className="kline-container" style={{ position: 'relative' }}>
       <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
       <button onClick={refresh} disabled={loading}
         style={{ position: 'absolute', top: 6, right: 8, zIndex: 10, padding: '2px 8px', borderRadius: 4, border: '1px solid var(--border)', background: 'rgba(10,10,32,.8)', color: loading ? 'var(--muted)' : 'var(--accent)', fontSize: 10, cursor: loading ? 'default' : 'pointer' }}
         title="刷新K线数据">{loading ? '加载中...' : '↻ 刷新'}</button>
+      <button onClick={() => setShowLevels(v => !v)}
+        style={{ position: 'absolute', top: 6, right: 64, zIndex: 10, padding: '2px 8px', borderRadius: 4, border: '1px solid var(--border)', background: 'rgba(10,10,32,.8)', color: showLevels ? 'var(--accent)' : 'var(--muted)', fontSize: 10, cursor: 'pointer' }}
+        title="切换支撑/阻力价位线">{showLevels ? '价位 ✓' : '价位 ✕'}</button>
     </div>
   )
 }

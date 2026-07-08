@@ -2,6 +2,7 @@ import { useEffect, useCallback, useState } from 'react'
 import { AppProvider, useApp } from './contexts/AppContext'
 import { listSkills } from './api/skills'
 import { getWatchlist } from './api/watchlist'
+import { getSignals } from './api/signals'
 import SearchBar from './components/SearchBar'
 import KlineChart from './components/KlineChart'
 import InfoCards from './components/InfoCards'
@@ -9,6 +10,7 @@ import DiagnosisPanel from './components/DiagnosisPanel'
 import NewsPanel from './components/NewsPanel'
 import SkillManager from './components/SkillManager'
 import TopTabBar from './components/TopTabBar'
+import SignalsPanel from './components/SignalsPanel'
 
 function Sidebar() {
   const { state, dispatch } = useApp()
@@ -144,6 +146,15 @@ function AppShell() {
   }, [dispatch])
   useEffect(() => { load() }, [load])
 
+  useEffect(() => {
+    const code = state.currentStock?.code
+    if (!code) { dispatch({ type: 'SET_SIGNALS', signals: null }); return }
+    let cancelled = false
+    getSignals(code).then(s => { if (!cancelled) dispatch({ type: 'SET_SIGNALS', signals: s }) })
+      .catch(() => { if (!cancelled) dispatch({ type: 'SET_SIGNALS', signals: null }) })
+    return () => { cancelled = true }
+  }, [state.currentStock?.code, dispatch])
+
   return (
     <div className="app">
       <Sidebar />
@@ -159,6 +170,7 @@ function AppShell() {
               </div>
               <InfoCards />
               <KlineChart />
+              <SignalsPanel />
               <DiagnosisPanel onManageSkills={() => setSkillOpen(true)} />
             </>
           ) : (
