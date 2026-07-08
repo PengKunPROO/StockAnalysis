@@ -21,9 +21,17 @@ cd "$ROOT/frontend/src"
     grep -q "news-panel" index.css || { echo "FAIL: news-panel"; exit 1; }
     grep -q "chat-panel" index.css || { echo "FAIL: chat-panel"; exit 1; }
     grep -q "\.info-cards" index.css || { echo "FAIL: info-cards"; exit 1; }
+    grep -q "top-tab-bar" index.css || { echo "FAIL: top-tab-bar"; exit 1; }
+    grep -q "signals-panel" index.css || { echo "FAIL: signals-panel"; exit 1; }
+    grep -q "screener-view" index.css || { echo "FAIL: screener-view"; exit 1; }
+    grep -q "intelligence-view" index.css || { echo "FAIL: intelligence-view"; exit 1; }
     grep -q "KlineChart" App.tsx || { echo "FAIL: KlineChart import"; exit 1; }
     grep -q "DiagnosisPanel" App.tsx || { echo "FAIL: DiagnosisPanel import"; exit 1; }
     grep -q "NewsPanel" App.tsx || { echo "FAIL: NewsPanel import"; exit 1; }
+    grep -q "TopTabBar" App.tsx || { echo "FAIL: TopTabBar import"; exit 1; }
+    grep -q "SignalsPanel" App.tsx || { echo "FAIL: SignalsPanel import"; exit 1; }
+    grep -q "ScreenerView" App.tsx || { echo "FAIL: ScreenerView import"; exit 1; }
+    grep -q "IntelligenceView" App.tsx || { echo "FAIL: IntelligenceView import"; exit 1; }
 echo "  Integrity checks: OK"
 
 # Port consistency

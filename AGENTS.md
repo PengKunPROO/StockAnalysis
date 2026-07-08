@@ -38,12 +38,17 @@ pytest tests/test_kline.py -v
 ```
 datasources (pull raw data) → DataEngine (cache-first via SQLite) → indicators (compute on read)
 ```
-- No pre-computed indicators in DB — store raw OHLCV, compute MACD/RSI/KDJ/BOLL at query time.
+- No pre-computed indicators in DB — store raw OHLCV, compute MACD/RSI/KDJ/BOLL/ATR/fibonacci at query time.
 - Datasources implement `DataSourceProtocol` (`backend/app/datasources/base.py`). Registry in `datasources/__init__.py` — order matters (first registered = primary for market).
-- Three sources: `tonghuashun` (A-share), `yfinance` (US), `sample` (test/fake data).
+- Sources: `tonghuashun` (A-share, primary), `akshare` (A-share fallback), `yfinance` (US), `sample` (test/fake).
+- `eastmoney.py` is a supplementary crawler (NOT a protocol datasource) for PE/PB/fund-flow/sectors/north-bound/announcements/limit-up-pool/dragon-tiger. All methods degrade to empty/None, never raise.
 
 ### API routes
-All under `/api/v1/` — router tree: `backend/app/api/v1/router.py`. Endpoints: stocks, financial, search, index, health, indicators, skills, watchlist, diagnosis, news.
+All under `/api/v1/` — router tree: `backend/app/api/v1/router.py`. Endpoints: stocks, financial, search, index, health, indicators, skills, watchlist, diagnosis, news, signals, screener, intelligence.
+- `signals/{code}` (rule signals JSON) + `signals/{code}/ai` (SSE: rules first, then DeepSeek stream) — 操作建议
+- `screener/{fields,skills,run}` — 选股器 (OCP FilterField registry + two-pass filter over eastmoney market snapshot)
+- `intelligence/{overview,limit-up,fund-flow,sectors,dragon-tiger,anomalies,announcements}` — 市场情报 (6 tabs)
+Screener/intelligence endpoints degrade gracefully: a failed data source returns empty + `warning`, never 500.
 
 ### AI Diagnosis
 - Function-calling via DeepSeek API (configurable via env) with SSE streaming.
@@ -67,7 +72,8 @@ All under `/api/v1/` — router tree: `backend/app/api/v1/router.py`. Endpoints:
 
 ## Frontend
 - Path alias `@/*` → `./src/*`.
-- Components: `KlineChart`, `InfoCards`, `DiagnosisPanel`, `NewsPanel`, `SearchBar`, `SkillManager`.
+- Components: `KlineChart`, `InfoCards`, `DiagnosisPanel`, `NewsPanel`, `SearchBar`, `SkillManager`, `TopTabBar`, `SignalsPanel`, `ScreenerView`, `IntelligenceView`.
+- App is a multi-view SPA: TopTabBar switches the 3 views; `activeView` + `signals` live in AppContext.
 - `verify.sh` does integrity checks that grep for specific CSS classes (`.kline-container`, `.news-panel`, `.right`) and component imports in `App.tsx`. If you add/rename components, update `verify.sh`.
 
 ## Config
