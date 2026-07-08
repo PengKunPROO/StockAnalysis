@@ -204,6 +204,155 @@ class TonghuashunSource:
     async def fetch_news(self, code: str, limit: int = 10) -> list:
         return []
 
+    # ---- 全市场快照与情报数据 (Financial-API special-data) ----
+    # 全部 try/except 降级：失败返回 [] / None，绝不抛异常。
+    async def fetch_market_snapshot(self, limit: int = 100, offset: int = 0) -> list[dict]:
+        """全市场分页实时行情快照 (prices/snapshot 全市场模式). 不传 thscodes 即全市场."""
+        try:
+            data = await self._get("/api/a-share/prices/snapshot", {"limit": limit, "offset": offset})
+            return [self._parse_quote(it) for it in data.get("item", [])]
+        except Exception:
+            return []
+
+    async def fetch_limit_up_pool(self, date: str = "") -> list[dict]:
+        """涨停股票池 (special-data/limit-up-pool). date=YYYYMMDD 默认今日."""
+        if not date:
+            from datetime import date as _d
+            date = _d.today().strftime("%Y%m%d")
+        try:
+            data = await self._get("/api/a-share/special-data/limit-up-pool", {
+                "date": date, "page": 1, "size": 200,
+                "sort_field": "continue_day_cnt", "sort_dir": "desc",
+            })
+            return [self._parse_limit_up(it) for it in data.get("item", [])]
+        except Exception:
+            return []
+
+    async def fetch_limit_up_ladder(self) -> list[dict]:
+        """连板天梯矩阵 (special-data/limit-up-ladder). 近30交易日 date->boards."""
+        try:
+            data = await self._get("/api/a-share/special-data/limit-up-ladder", {})
+            return data if isinstance(data, list) else []
+        except Exception:
+            return []
+
+    async def fetch_dragon_tiger(self, date: str = "", board_type: str = "all") -> list[dict]:
+        """龙虎榜 (special-data/dragon-tiger-list). date=YYYYMMDD, board_type=all/inst/hot."""
+        if not date:
+            from datetime import date as _d, timedelta
+            date = (_d.today() - timedelta(days=1)).strftime("%Y%m%d")
+        try:
+            data = await self._get("/api/a-share/special-data/dragon-tiger-list", {
+                "trade_date": date, "board_type": board_type, "page": 1, "size": 100,
+            })
+            items = data.get("stock_items", []) if isinstance(data, dict) else (data or [])
+            return [self._parse_dragon_tiger(it) for it in items]
+        except Exception:
+            return []
+
+    async def fetch_anomaly_list(self, tag: str = "") -> list[dict]:
+        """当日个股异动原因列表 (special-data/anomaly-analysis-list)."""
+        params = {}
+        if tag:
+            params["tag"] = tag
+        try:
+            data = await self._get("/api/a-share/special-data/anomaly-analysis-list", params)
+            items = data if isinstance(data, list) else (data.get("item", []) if isinstance(data, dict) else [])
+            return [self._parse_anomaly(it) for it in items]
+        except Exception:
+            return []
+
+    async def fetch_anomaly_stock(self, thscodes: list[str]) -> list[dict]:
+        """按股票批量查异动 (special-data/anomaly-analysis-stock). 最多50只."""
+        try:
+            codes = ",".join([self._to_ths_code(c) for c in thscodes[:50]])
+            data = await self._get("/api/a-share/special-data/anomaly-analysis-stock", {"thscodes": codes})
+            items = data if isinstance(data, list) else (data.get("item", []) if isinstance(data, dict) else [])
+            return [self._parse_anomaly(it) for it in items]
+        except Exception:
+            return []
+
+    async def fetch_hot_stock(self, level: str = "day") -> list[dict]:
+        """热股榜 (special-data/hot-stock-list). level=day/hour."""
+        try:
+            data = await self._get("/api/a-share/special-data/hot-stock-list", {"level": level})
+            return [self._parse_hot(it) for it in data.get("item", [])]
+        except Exception:
+            return []
+
+    async def fetch_ticker_list(self, asset_type: str = "a-share", limit: int = 5000) -> list[dict]:
+        """标的列表 (meta/tickers/list). asset_type=a-share/a-share-index. 用于补全股票名称."""
+        try:
+            data = await self._get("/api/meta/tickers/list", {"asset_type": asset_type, "limit": limit})
+            return [
+                {"code": self._to_our_code(it.get("thscode", "")),
+                 "name": it.get("name", ""), "exchange": it.get("exchange", "")}
+                for it in data.get("item", [])
+            ]
+        except Exception:
+            return []
+
+    async def fetch_index_snapshot(self, thscodes: list[str]) -> list[dict]:
+        """指数行情快照 (a-share-index/prices/snapshot)."""
+        try:
+            data = await self._get("/api/a-share-index/prices/snapshot", {"thscodes": ",".join(thscodes)})
+            return [self._parse_quote(it) for it in data.get("item", [])]
+        except Exception:
+            return []
+
+    # ---- response parsers (snake_case, code normalized to sh.X / sz.X) ----
+    def _parse_quote(self, it: dict) -> dict:
+        return {
+            "code": self._to_our_code(it.get("thscode", "")),
+            "name": it.get("name", "") or "",
+            "price": _safe_float(it.get("last_price")),
+            "change_pct": _safe_float(it.get("price_change_ratio_pct")),
+            "volume": _safe_float(it.get("volume")),
+            "amount": _safe_float(it.get("turnover")),  # fuyao turnover = 成交额
+            "open": _safe_float(it.get("open_price")),
+            "high": _safe_float(it.get("high_price")),
+            "low": _safe_float(it.get("low_price")),
+            "prev_close": _safe_float(it.get("prev_price")),
+        }
+
+    def _parse_limit_up(self, it: dict) -> dict:
+        return {
+            "code": self._to_our_code(it.get("thscode", "")),
+            "name": it.get("name", ""),
+            "price": _safe_float(it.get("last_price")),
+            "change_pct": _safe_float(it.get("price_change_ratio_pct")),
+            "limit_up_time": it.get("limit_up_time", ""),
+            "reason": it.get("limit_up_reason", ""),
+            "consecutive_days": int(it.get("continue_day_cnt") or 1),
+            "seal_amount": _safe_float(it.get("seal_money")),
+        }
+
+    def _parse_anomaly(self, it: dict) -> dict:
+        return {
+            "code": self._to_our_code(it.get("thscode", "")),
+            "name": it.get("stock_name", it.get("name", "")),
+            "content": it.get("analysis_content", ""),
+            "keywords": it.get("keyword_list", []),
+            "tag": it.get("tag_name", ""),
+        }
+
+    def _parse_dragon_tiger(self, it: dict) -> dict:
+        return {
+            "code": self._to_our_code(it.get("thscode", "")),
+            "name": it.get("name", it.get("stock_name", "")),
+            "reason": it.get("explain", it.get("reason", "")),
+            "change_pct": _safe_float(it.get("price_change_ratio_pct")),
+            "net_buy": _safe_float(it.get("net_buy")),
+        }
+
+    def _parse_hot(self, it: dict) -> dict:
+        return {
+            "code": self._to_our_code(it.get("thscode", "")),
+            "name": it.get("name", it.get("stock_name", "")),
+            "rank": _safe_float(it.get("rank")),
+            "heat": _safe_float(it.get("heat")),
+        }
+
     def health_check(self) -> bool:
         return bool(self._get_key())
 
