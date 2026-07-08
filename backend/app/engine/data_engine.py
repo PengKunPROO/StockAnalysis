@@ -19,24 +19,15 @@ class DataEngine:
         async with factory() as session:
             cached = await queries.get_daily_klines(session, code, start, end)
             if cached and len(cached) > 0:
-                # For daily data, verify cache spans the requested range.
-                if period == "daily":
-                    first_cached = cached[0]["date"]
-                    last_cached = cached[-1]["date"]
-                    try:
-                        start_d = date.fromisoformat(start)
-                        end_d = date.fromisoformat(end)
-                        first_d = date.fromisoformat(first_cached)
-                        last_d = date.fromisoformat(last_cached)
-                        # Cache is valid only if it covers both start and end of the requested range.
-                        # Allow 3-trading-day tolerance for the end date (weekends/holidays).
-                        start_ok = first_d <= start_d + timedelta(days=5)
-                        end_ok = last_d >= end_d - timedelta(days=3)
-                        if start_ok and end_ok:
-                            return cached, None
-                    except (ValueError, TypeError):
-                        pass
-                else:
+                # 缓存优先: 覆盖到近期(end-7天)即直接返回,避免慢网络拉取。
+                # fuyao historical kline 间歇超时,优先用缓存兜底(bug1: K线消失)。
+                last_cached = cached[-1]["date"]
+                try:
+                    end_d = date.fromisoformat(end)
+                    last_d = date.fromisoformat(last_cached)
+                    if last_d >= end_d - timedelta(days=7):
+                        return cached, None
+                except (ValueError, TypeError):
                     return cached, None
 
             market = self._market_from_code(code)
@@ -48,7 +39,7 @@ class DataEngine:
             for source in sources:
                 try:
                     bars = await asyncio.wait_for(
-                        source.fetch_kline(code, period, start, end), timeout=20
+                        source.fetch_kline(code, period, start, end), timeout=8
                     )
                     if bars:
                         break

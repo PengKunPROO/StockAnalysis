@@ -5,6 +5,7 @@ Pass 2: 对幸存者(≤30)逐个查 roe (financials) + 技术信号 (indicators
 name 用 fuyao ticker-list 补全。
 """
 import asyncio
+import time
 from datetime import date, timedelta
 from app.screener.fields import (
     get_fields, matches_snapshot, FIELD_BY_NAME, PASS2_FIELDS, TECH_FIELDS, SORTABLE,
@@ -52,6 +53,24 @@ async def _fetch_name_map(source) -> dict[str, str]:
         return {t["code"]: t["name"] for t in tickers if t.get("code") and t.get("name")}
     except Exception:
         return {}
+
+
+# 60s 内存缓存: 避免多次筛选重复拉全市场快照+名称映射 (bug5 提速)
+_SNAP_CACHE = {"snap": None, "names": None, "ts": 0}
+
+
+async def _get_snapshot_cached(source, ttl: int = 60):
+    now = time.time()
+    if _SNAP_CACHE["snap"] is not None and now - _SNAP_CACHE["ts"] < ttl:
+        return _SNAP_CACHE["snap"], _SNAP_CACHE["names"]
+    snap, names = await asyncio.gather(
+        source.fetch_market_snapshot(limit=500),
+        _fetch_name_map(source),
+    )
+    _SNAP_CACHE["snap"] = snap
+    _SNAP_CACHE["names"] = names
+    _SNAP_CACHE["ts"] = now
+    return snap, names
 
 
 def _roe_matches(roe: float | None, roe_val: dict) -> bool:
@@ -114,11 +133,8 @@ async def run_screener(values: dict, sort: str = "change_pct", limit: int = 50) 
     if source is None:
         return {"results": [], "count": 0, "warning": "无 A 股数据源"}
 
-    # 并行：全市场快照 + 名称映射
-    snapshot, name_map = await asyncio.gather(
-        source.fetch_market_snapshot(limit=500),
-        _fetch_name_map(source),
-    )
+    # 全市场快照+名称映射 (60s 缓存, 避免多次筛选重复拉取 - bug5)
+    snapshot, name_map = await _get_snapshot_cached(source)
     if not snapshot:
         return {"results": [], "count": 0, "warning": "同花顺行情快照暂不可用，请稍后重试"}
 

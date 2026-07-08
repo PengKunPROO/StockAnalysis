@@ -7,6 +7,7 @@ export const getSignals = (code: string, days = 90) =>
 interface AiEvents {
   onSignals?: (payload: SignalsPayload) => void
   onContent?: (chunk: string) => void
+  onReasoning?: (chunk: string) => void
   onError?: (msg: string) => void
   onDone?: () => void
 }
@@ -34,6 +35,7 @@ export async function streamSignalsAI(code: string, events: AiEvents, days = 90)
           const data = JSON.parse(line.slice(6))
           if (data.type === 'signals') events.onSignals?.(data.data)
           else if (data.type === 'content') events.onContent?.(data.content)
+          else if (data.type === 'reasoning') events.onReasoning?.(data.content)
           else if (data.type === 'error') events.onError?.(data.content)
           else if (data.type === 'done') events.onDone?.()
         } catch {}

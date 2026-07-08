@@ -149,7 +149,7 @@ function LimitUpTab({ onOpen }: { onOpen: (code: string, name: string) => void }
               <td className="r up">{(s.change_pct || 0).toFixed(2)}%</td>
               <td className="r muted">{s.seal_amount ? (s.seal_amount * 1e-8).toFixed(2) : '-'}</td>
               <td className="muted small">{s.limit_up_time || '-'}</td>
-              <td className="c accent">-></td>
+              <td className="c accent">{'->'}</td>
             </tr>
           ))}
         </tbody>
@@ -244,7 +244,7 @@ function DragonTigerTab({ onOpen }: { onOpen: (code: string, name: string) => vo
             <td className="r" style={{ color: (s.change_pct || 0) >= 0 ? 'var(--up)' : 'var(--down)' }}>{s.change_pct?.toFixed(2)}%</td>
             <td className="r" style={{ color: (s.net_buy || 0) >= 0 ? 'var(--up)' : 'var(--down)' }}>{s.net_buy ? (s.net_buy * 1e-8).toFixed(2) : '-'}</td>
             <td className="muted small">{s.reason || '-'}</td>
-            <td className="c accent">-></td>
+            <td className="c accent">{'->'}</td>
           </tr>
         ))}
       </tbody>
@@ -258,10 +258,10 @@ const ANOMALY_COLOR: Record<string, string> = {
 
 function AnomaliesTab({ onOpen }: { onOpen: (code: string, name: string) => void }) {
   const { data, loading } = useTabData(() => getAnomalies(50), [])
+  const [filter, setFilter] = useState('all')
   if (loading) return <Loading />
   if (!data || !data.anomalies.length) return <Loading msg={data?.warning || '无异动数据'} />
   const types = ['all', ...Array.from(new Set(data.anomalies.map(a => a.type)))]
-  const [filter, setFilter] = useState('all')
   const list = filter === 'all' ? data.anomalies : data.anomalies.filter(a => a.type === filter)
   return (
     <div>
@@ -277,7 +277,7 @@ function AnomaliesTab({ onOpen }: { onOpen: (code: string, name: string) => void
               <td className="name">{a.name}</td>
               <td><span className="anomaly-badge" style={{ background: `${ANOMALY_COLOR[a.type] || 'var(--gold)'}33`, color: ANOMALY_COLOR[a.type] || 'var(--gold)' }}>{a.type}</span></td>
               <td className="muted small">{a.reason}</td>
-              <td className="c accent">-></td>
+              <td className="c accent">{'->'}</td>
             </tr>
           ))}
         </tbody>

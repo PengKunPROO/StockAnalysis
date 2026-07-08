@@ -128,7 +128,12 @@ async def ai_interpret(code: str, days: int = 90):
                         try:
                             obj = json.loads(chunk)
                             delta = obj.get("choices", [{}])[0].get("delta", {})
+                            # deepseek-v4-pro 等推理模型: 答案在 reasoning_content, content 为空。
+                            # 同时捕获两者, 前端区分显示(兼容非推理模型)。
+                            reasoning = delta.get("reasoning_content")
                             content = delta.get("content")
+                            if reasoning:
+                                yield f"data: {json.dumps({'type': 'reasoning', 'content': reasoning}, ensure_ascii=False)}\n\n"
                             if content:
                                 yield f"data: {json.dumps({'type': 'content', 'content': content}, ensure_ascii=False)}\n\n"
                         except (json.JSONDecodeError, IndexError):

@@ -52,7 +52,7 @@ export default function KlineChart() {
 
     const load = async () => {
       const end = today()
-      const start = `${parseInt(end.slice(0, 4)) - 2}${end.slice(4)}`
+      const start = `${parseInt(end.slice(0, 4)) - 1}${end.slice(4)}`
       try {
         const { data } = await getKline(code, 'daily', start, end)
         if (id !== reqIdRef.current) return // stale
@@ -81,7 +81,7 @@ export default function KlineChart() {
     setLoading(true)
     const load = async () => {
       const end = today()
-      const start = `${parseInt(end.slice(0, 4)) - 2}${end.slice(4)}`
+      const start = `${parseInt(end.slice(0, 4)) - 1}${end.slice(4)}`
       try {
         const { data } = await getKline(code, 'daily', start, end)
         if (id !== reqIdRef.current) return

@@ -28,7 +28,7 @@ def test_market_snapshot_parse(monkeypatch):
          "price_change_ratio_pct": 1.74, "volume": 12345, "turnover": 999.0,
          "open_price": 1680, "high_price": 1710, "low_price": 1675, "prev_price": 1690},
     ]})
-    out = asyncio.get_event_loop().run_until_complete(_src().fetch_market_snapshot())
+    out = asyncio.run(_src().fetch_market_snapshot())
     assert len(out) == 1
     q = out[0]
     assert q["code"] == "sh.600519"
@@ -44,7 +44,7 @@ def test_limit_up_pool_parse(monkeypatch):
          "price_change_ratio_pct": 10.0, "limit_up_time": "093000",
          "limit_up_reason": "业绩", "continue_day_cnt": 3, "seal_money": 5e8},
     ]})
-    out = asyncio.get_event_loop().run_until_complete(_src().fetch_limit_up_pool("20260708"))
+    out = asyncio.run(_src().fetch_limit_up_pool("20260708"))
     assert out[0]["code"] == "sh.600519"
     assert out[0]["consecutive_days"] == 3
     assert out[0]["seal_amount"] == 5e8
@@ -56,7 +56,7 @@ def test_dragon_tiger_parse(monkeypatch):
         {"thscode": "600519.SH", "name": "贵州茅台", "explain": "日涨幅偏离",
          "price_change_ratio_pct": 9.5, "net_buy": 1.2e8},
     ]})
-    out = asyncio.get_event_loop().run_until_complete(_src().fetch_dragon_tiger("20260707"))
+    out = asyncio.run(_src().fetch_dragon_tiger("20260707"))
     assert out[0]["code"] == "sh.600519"
     assert out[0]["net_buy"] == 1.2e8
 
@@ -66,7 +66,7 @@ def test_anomaly_list_parse(monkeypatch):
         {"thscode": "600519.SH", "stock_name": "贵州茅台",
          "analysis_content": "涨停", "keyword_list": ["白酒"], "tag_name": "涨停"},
     ]})
-    out = asyncio.get_event_loop().run_until_complete(_src().fetch_anomaly_list())
+    out = asyncio.run(_src().fetch_anomaly_list())
     assert out[0]["name"] == "贵州茅台"
     assert out[0]["tag"] == "涨停"
     assert out[0]["keywords"] == ["白酒"]
@@ -76,7 +76,7 @@ def test_ticker_list_parse(monkeypatch):
     _patch_get(monkeypatch, {"item": [
         {"thscode": "600519.SH", "name": "贵州茅台", "exchange": "SH"},
     ]})
-    out = asyncio.get_event_loop().run_until_complete(_src().fetch_ticker_list())
+    out = asyncio.run(_src().fetch_ticker_list())
     assert out[0]["code"] == "sh.600519"
     assert out[0]["name"] == "贵州茅台"
 
@@ -86,7 +86,7 @@ def test_index_snapshot_parse(monkeypatch):
         {"thscode": "000001.SH", "last_price": 3200, "price_change_ratio_pct": 0.5,
          "volume": 0, "turnover": 0, "open_price": 3190, "high_price": 3210, "low_price": 3185, "prev_price": 3184},
     ]})
-    out = asyncio.get_event_loop().run_until_complete(_src().fetch_index_snapshot(["000001.SH"]))
+    out = asyncio.run(_src().fetch_index_snapshot(["000001.SH"]))
     assert out[0]["price"] == 3200
     assert out[0]["change_pct"] == 0.5
 
@@ -106,7 +106,7 @@ def test_index_snapshot_parse(monkeypatch):
 def test_degrade_on_network_error(monkeypatch, method, args):
     _patch_raise(monkeypatch)
     src = _src()
-    out = asyncio.get_event_loop().run_until_complete(getattr(src, method)(*args))
+    out = asyncio.run(getattr(src, method)(*args))
     assert out == [] or out is None
 
 
@@ -120,17 +120,17 @@ def _has_key():
 
 @pytest.mark.skipif(not _has_key(), reason="no fuyao api key")
 def test_smoke_market_snapshot():
-    out = asyncio.get_event_loop().run_until_complete(_src().fetch_market_snapshot(limit=5))
+    out = asyncio.run(_src().fetch_market_snapshot(limit=5))
     assert isinstance(out, list)
 
 
 @pytest.mark.skipif(not _has_key(), reason="no fuyao api key")
 def test_smoke_index_snapshot():
-    out = asyncio.get_event_loop().run_until_complete(_src().fetch_index_snapshot(["000001.SH"]))
+    out = asyncio.run(_src().fetch_index_snapshot(["000001.SH"]))
     assert isinstance(out, list)
 
 
 @pytest.mark.skipif(not _has_key(), reason="no fuyao api key")
 def test_smoke_anomaly_list():
-    out = asyncio.get_event_loop().run_until_complete(_src().fetch_anomaly_list())
+    out = asyncio.run(_src().fetch_anomaly_list())
     assert isinstance(out, list)

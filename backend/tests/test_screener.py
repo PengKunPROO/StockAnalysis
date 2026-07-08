@@ -149,5 +149,5 @@ def test_fuyao_market_snapshot_degrades(monkeypatch):
         raise Exception("net down")
     monkeypatch.setattr(TonghuashunSource, "_get", boom)
     s = TonghuashunSource()
-    out = asyncio.get_event_loop().run_until_complete(s.fetch_market_snapshot())
+    out = asyncio.run(s.fetch_market_snapshot())
     assert out == []

@@ -9,14 +9,15 @@ export default function SignalsPanel() {
   const [tab, setTab] = useState<'rules' | 'ai'>('rules')
 
   const [aiText, setAiText] = useState('')
+  const [aiReasoning, setAiReasoning] = useState('')
   const [aiLoading, setAiLoading] = useState(false)
   const [aiError, setAiError] = useState('')
-
   const runAi = useCallback(async () => {
     if (!code || aiLoading) return
-    setAiText(''); setAiError(''); setAiLoading(true)
+    setAiText(''); setAiReasoning(''); setAiError(''); setAiLoading(true)
     await streamSignalsAI(code, {
       onSignals: (p) => dispatch({ type: 'SET_SIGNALS', signals: p }),
+      onReasoning: (chunk) => setAiReasoning(prev => prev + chunk),
       onContent: (chunk) => setAiText(prev => prev + chunk),
       onError: (msg) => setAiError(msg),
       onDone: () => setAiLoading(false),
@@ -114,11 +115,12 @@ export default function SignalsPanel() {
 
       {data && tab === 'ai' && (
         <div className="ai-body">
-          {aiText === '' && !aiLoading && !aiError && (
+          {aiText === '' && aiReasoning === '' && !aiLoading && !aiError && (
             <button className="ai-run-btn" onClick={runAi}>▸ 生成AI解读</button>
           )}
-          {aiLoading && aiText === '' && <div className="signals-loading">AI 分析中...</div>}
+          {aiLoading && aiText === '' && aiReasoning === '' && <div className="signals-loading">AI 分析中...</div>}
           {aiError && <div className="signals-loading" style={{ color: 'var(--up)' }}>{aiError}</div>}
+          {aiReasoning && <pre className="ai-reasoning">💭 思考过程: {aiReasoning}{aiLoading && aiText === '' ? '▍' : ''}</pre>}
           {aiText && <pre className="ai-text">{aiText}{aiLoading && '▍'}</pre>}
           <div className="ai-disclaimer">⚠ 以上为AI分析参考，不构成投资建议。市场有风险，请结合自身情况决策。</div>
         </div>

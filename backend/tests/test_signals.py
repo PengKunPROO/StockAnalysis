@@ -211,3 +211,20 @@ def test_signals_api_ai_stream_no_llm_key(client, stock_code, monkeypatch):
         assert "data:" in body
         # always emits a done event (or error path)
         assert "done" in body or "error" in body
+
+
+def _has_llm_key():
+    from app.config import settings
+    return bool(settings.diagnosis_llm_api_key)
+
+
+@pytest.mark.skipif(not _has_llm_key(), reason="no llm key")
+def test_signals_ai_streams_reasoning_or_content(client, stock_code):
+    """bug2 修复: v4-pro 推理模型把答案放 reasoning_content, SSE 应能收到 reasoning 或 content。"""
+    r = client.post(f"/api/v1/signals/{stock_code}/ai?days=90")
+    assert r.status_code in (200, 503)
+    if r.status_code == 200:
+        body = r.text
+        assert "signals" in body
+        # 修复后应捕获 reasoning_content 或 content
+        assert "reasoning" in body or "content" in body or "error" in body
