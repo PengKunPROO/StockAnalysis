@@ -8,6 +8,7 @@ import InfoCards from './components/InfoCards'
 import DiagnosisPanel from './components/DiagnosisPanel'
 import NewsPanel from './components/NewsPanel'
 import SkillManager from './components/SkillManager'
+import TopTabBar from './components/TopTabBar'
 
 function Sidebar() {
   const { state, dispatch } = useApp()
@@ -124,6 +125,16 @@ function StatusBar() {
   )
 }
 
+function PlaceholderView({ title, desc }: { title: string; desc: string }) {
+  return (
+    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)', fontSize: '1rem', flexDirection: 'column', gap: 8 }}>
+      <span style={{ fontSize: '2rem' }}>{title}</span>
+      {desc}
+      <span style={{ fontSize: '0.7rem', color: 'var(--muted)' }}>该模块将在后续阶段实现</span>
+    </div>
+  )
+}
+
 function AppShell() {
   const { state, dispatch } = useApp()
   const [skillOpen, setSkillOpen] = useState(false)
@@ -137,27 +148,32 @@ function AppShell() {
     <div className="app">
       <Sidebar />
       <div className="main">
+        <TopTabBar />
         <TopBar />
         <div className="content">
-          {state.currentStock ? <>
-            <div className="stock-header">
-              <span className="name">{state.currentStock.name}</span>
-              <span className="code">{state.currentStock.code}</span>
-            </div>
-            <InfoCards />
-            <KlineChart />
-            <DiagnosisPanel onManageSkills={() => setSkillOpen(true)} />
-          </> : (
+          {state.activeView === 'stock' && (state.currentStock ? (
+            <>
+              <div className="stock-header">
+                <span className="name">{state.currentStock.name}</span>
+                <span className="code">{state.currentStock.code}</span>
+              </div>
+              <InfoCards />
+              <KlineChart />
+              <DiagnosisPanel onManageSkills={() => setSkillOpen(true)} />
+            </>
+          ) : (
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)', fontSize: '1rem', flexDirection: 'column', gap: 8 }}>
               <span style={{ fontSize: '2rem' }}>🔍</span>
               搜索股票代码或名称开始分析
               <span style={{ fontSize: '0.7rem', color: 'var(--muted)' }}>支持 A股（sh.600519 / sz.000001）和美股（us.AAPL）</span>
             </div>
-          )}
+          ))}
+          {state.activeView === 'screener' && <PlaceholderView title="🔍" desc="选股器" />}
+          {state.activeView === 'intel' && <PlaceholderView title="🌐" desc="市场情报" />}
         </div>
         <StatusBar />
       </div>
-      {state.currentStock && <NewsPanel />}
+      {state.activeView === 'stock' && state.currentStock && <NewsPanel />}
       {skillOpen && <SkillManager open={skillOpen} onClose={() => setSkillOpen(false)} onRefresh={load} />}
     </div>
   )

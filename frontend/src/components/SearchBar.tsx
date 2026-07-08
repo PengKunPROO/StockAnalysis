@@ -41,6 +41,7 @@ export default function SearchBar() {
 
   const select = useCallback(async (s: StockInfo) => {
     dispatch({ type: 'SET_STOCK', stock: s })
+    dispatch({ type: 'SET_VIEW', view: 'stock' })
     setQuery(s.name); setOpen(false); setResults([])
     inputRef.current?.blur()
     if (!state.watchlist.find(w => w.code === s.code)) {

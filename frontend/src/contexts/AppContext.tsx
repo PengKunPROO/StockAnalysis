@@ -3,12 +3,15 @@ import type { StockInfo, SkillMeta, DiagnosisSession, WatchlistItem } from '../t
 
 const STORAGE_KEY = 'stockagent_state'
 
+export type AppView = 'stock' | 'screener' | 'intel'
+
 interface AppState {
   currentStock: StockInfo | null
   skills: SkillMeta[]
   sessions: DiagnosisSession[]
   watchlist: WatchlistItem[]
   skillManagerOpen: boolean
+  activeView: AppView
 }
 
 function loadState(): Partial<AppState> {
@@ -34,6 +37,7 @@ const initialState: AppState = {
   sessions: [],
   watchlist: loadState().watchlist || [],
   skillManagerOpen: false,
+  activeView: 'stock',
 }
 
 type Action =
@@ -42,6 +46,7 @@ type Action =
   | { type: 'SET_SESSIONS'; sessions: DiagnosisSession[] }
   | { type: 'SET_WATCHLIST'; watchlist: WatchlistItem[] }
   | { type: 'TOGGLE_SKILL_MANAGER'; open?: boolean }
+  | { type: 'SET_VIEW'; view: AppView }
 
 function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
@@ -50,6 +55,7 @@ function reducer(state: AppState, action: Action): AppState {
     case 'SET_SESSIONS': return { ...state, sessions: action.sessions }
     case 'SET_WATCHLIST': return { ...state, watchlist: action.watchlist }
     case 'TOGGLE_SKILL_MANAGER': return { ...state, skillManagerOpen: action.open ?? !state.skillManagerOpen }
+    case 'SET_VIEW': return { ...state, activeView: action.view }
     default: return state
   }
 }

@@ -67,6 +67,13 @@ a:hover { text-decoration: underline; }
 /* === Center Panel === */
 .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
 
+/* === Top Tab Bar === */
+.top-tab-bar { display: flex; gap: 2px; padding: 0 12px; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.top-tab { display: flex; align-items: center; gap: 6px; padding: 8px 16px; background: transparent; border: none; border-bottom: 2px solid transparent; color: var(--muted); font-size: clamp(0.7rem, 0.9vw, 0.8rem); cursor: pointer; transition: .2s; }
+.top-tab:hover { color: var(--heading); background: var(--accent-glow); }
+.top-tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+.top-tab .icon { font-size: 0.85rem; }
+
 /* === Topbar === */
 .topbar { padding: 6px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 16px; min-height: 42px; flex-shrink: 0; }
 .topbar .search-wrap { flex: 1; max-width: 360px; }
