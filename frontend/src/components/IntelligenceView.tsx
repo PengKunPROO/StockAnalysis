@@ -13,7 +13,7 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'sectors', label: '板块轮动' },
   { key: 'dragon-tiger', label: '龙虎榜' },
   { key: 'anomalies', label: '异动' },
-  { key: 'announcements', label: '公告' },
+  { key: 'announcements', label: '热点' },
 ]
 
 export default function IntelligenceView() {
@@ -28,6 +28,7 @@ export default function IntelligenceView() {
   }, [])
 
   const openStock = (code: string, name: string) => {
+    if (!code) return
     dispatch({ type: 'SET_STOCK', stock: { code, name, market: 'a_share', industry: '' } })
     dispatch({ type: 'SET_VIEW', view: 'stock' })
   }
@@ -44,7 +45,7 @@ export default function IntelligenceView() {
       <div className="intel-content">
         {tab === 'limit-up' && <LimitUpTab onOpen={openStock} />}
         {tab === 'fund-flow' && <FundFlowTab />}
-        {tab === 'sectors' && <SectorsTab onOpen={openStock} />}
+        {tab === 'sectors' && <SectorsTab />}
         {tab === 'dragon-tiger' && <DragonTigerTab onOpen={openStock} />}
         {tab === 'anomalies' && <AnomaliesTab onOpen={openStock} />}
         {tab === 'announcements' && <AnnouncementsTab onOpen={openStock} />}
@@ -90,7 +91,6 @@ function Dashboard({ ov }: { ov: Overview }) {
           </span>
         </div>
         <span className="sent-stat">赚钱效应 <b className="accent">{ov.sentiment.profit_effect}%</b></span>
-        <span className="sent-stat">打板成功率 <b className="accent">{ov.sentiment.seal_success_rate ?? '--'}%</b></span>
         <span className="sent-stat">连板晋级率 <b className="gold">{ov.sentiment.promotion_rate ?? '--'}%</b></span>
       </div>
     </div>
@@ -110,14 +110,23 @@ function useTabData<T>(fetcher: () => Promise<T>, deps: any[] = []) {
   return { data, loading }
 }
 
+function Loading({ msg }: { msg?: string }) {
+  return <div className="intel-loading">{msg || '加载中...'}</div>
+}
+function Warn({ d }: { d: any }) {
+  const w = d?.warning
+  if (!w) return null
+  return <div className="results-warning">{w}</div>
+}
+
 function LimitUpTab({ onOpen }: { onOpen: (code: string, name: string) => void }) {
   const { data, loading } = useTabData(() => getLimitUp(), [])
-  if (loading) return <div className="intel-loading">加载中...</div>
-  if (!data) return <div className="intel-loading">数据不可用</div>
-  if (data.warning && !data.stocks.length) return <div className="intel-loading">{data.warning}</div>
+  if (loading) return <Loading />
+  if (!data) return <Loading msg="数据不可用" />
+  if (!data.stocks.length) return <Loading msg={data.warning || '当日无涨停数据'} />
   const buckets = Object.entries(data.buckets).sort((a, b) => {
-    const order = (k: string) => (k === '高位板' ? 99 : parseInt(k) || 0)
-    return order(b[0]) - order(a[0])
+    const o = (k: string) => (k === '高位板' ? 99 : parseInt(k) || 0)
+    return o(b[0]) - o(a[0])
   })
   return (
     <div>
@@ -130,7 +139,7 @@ function LimitUpTab({ onOpen }: { onOpen: (code: string, name: string) => void }
         <div className="bucket-total">合计涨停 {data.count} 只</div>
       </div>
       <table className="intel-table">
-        <thead><tr><th>代码</th><th>名称</th><th className="r">连板</th><th className="r">涨幅</th><th className="r">封板金额(亿)</th><th className="r">炸板</th><th className="c"></th></tr></thead>
+        <thead><tr><th>代码</th><th>名称</th><th className="r">连板</th><th className="r">涨幅</th><th className="r">封单额(亿)</th><th>涨停时间</th><th className="c"></th></tr></thead>
         <tbody>
           {data.stocks.map(s => (
             <tr key={s.code} onClick={() => onOpen(s.code, s.name)}>
@@ -139,8 +148,8 @@ function LimitUpTab({ onOpen }: { onOpen: (code: string, name: string) => void }
               <td className="r accent">{s.consecutive_days}</td>
               <td className="r up">{(s.change_pct || 0).toFixed(2)}%</td>
               <td className="r muted">{s.seal_amount ? (s.seal_amount * 1e-8).toFixed(2) : '-'}</td>
-              <td className="r muted">{s.broken_count}</td>
-              <td className="c accent">→</td>
+              <td className="muted small">{s.limit_up_time || '-'}</td>
+              <td className="c accent">-></td>
             </tr>
           ))}
         </tbody>
@@ -150,20 +159,20 @@ function LimitUpTab({ onOpen }: { onOpen: (code: string, name: string) => void }
 }
 
 function FundFlowTab() {
-  const [scope, setScope] = useState<'industry' | 'concept' | 'north' | 'stock'>('industry')
+  const [scope, setScope] = useState<'north' | 'stock'>('stock')
   const { data, loading } = useTabData(() => getFundFlow(scope), [scope])
-  if (loading) return <div className="intel-loading">加载中...</div>
-  if (!data) return <div className="intel-loading">数据不可用</div>
-  if (data.warning && !data.sectors && !data.north && !data.stocks) return <div className="intel-loading">{data.warning}</div>
+  if (loading) return <Loading />
+  if (!data) return <Loading msg="数据不可用" />
   return (
     <div>
       <div className="sub-tabs">
-        {(['industry', 'concept', 'north', 'stock'] as const).map(s => (
+        {(['stock', 'north'] as const).map(s => (
           <button key={s} className={scope === s ? 'active' : ''} onClick={() => setScope(s)}>
-            {s === 'industry' ? '行业' : s === 'concept' ? '概念' : s === 'north' ? '北向资金' : '个股'}
+            {s === 'stock' ? '个股成交额' : '北向资金'}
           </button>
         ))}
       </div>
+      <Warn d={data} />
       {scope === 'north' ? (
         <table className="intel-table">
           <thead><tr><th>日期</th><th className="r">沪股通(亿)</th><th className="r">深股通(亿)</th><th className="r">合计(亿)</th></tr></thead>
@@ -178,26 +187,16 @@ function FundFlowTab() {
             ))}
           </tbody>
         </table>
-      ) : scope === 'stock' ? (
-        <table className="intel-table">
-          <thead><tr><th>代码</th><th>名称</th><th className="r">成交额(亿)</th><th className="r">涨幅</th></tr></thead>
-          <tbody>
-            {(data.stocks || []).map((s: any) => (
-              <tr key={s.code}><td className="code">{s.code.split('.')[1]}</td><td className="name">{s.name}</td><td className="r">{s.amount}</td><td className="r" style={{ color: s.change_pct >= 0 ? 'var(--up)' : 'var(--down)' }}>{s.change_pct?.toFixed(2)}%</td></tr>
-            ))}
-          </tbody>
-        </table>
       ) : (
         <table className="intel-table">
-          <thead><tr><th>板块</th><th className="r">涨跌幅</th><th className="r">上涨</th><th className="r">下跌</th><th className="r">主力净流入(亿)</th></tr></thead>
+          <thead><tr><th>代码</th><th>名称</th><th className="r">成交额</th><th className="r">涨幅</th></tr></thead>
           <tbody>
-            {(data.sectors || []).map((s: SectorItem) => (
+            {(data.stocks || []).map((s: any) => (
               <tr key={s.code}>
+                <td className="code">{s.code.split('.')[1]}</td>
                 <td className="name">{s.name}</td>
+                <td className="r">{s.amount != null ? (s.amount * 1e-8).toFixed(2) : '-'}</td>
                 <td className="r" style={{ color: s.change_pct >= 0 ? 'var(--up)' : 'var(--down)' }}>{s.change_pct?.toFixed(2)}%</td>
-                <td className="r up">{s.up_count ?? '-'}</td>
-                <td className="r down">{s.down_count ?? '-'}</td>
-                <td className="r" style={{ color: (s.main_net || 0) >= 0 ? 'var(--up)' : 'var(--down)' }}>{s.main_net ? (s.main_net * 1e-8).toFixed(2) : '-'}</td>
               </tr>
             ))}
           </tbody>
@@ -207,23 +206,19 @@ function FundFlowTab() {
   )
 }
 
-function SectorsTab({ onOpen }: { onOpen: (code: string, name: string) => void }) {
-  const [type, setType] = useState<'industry' | 'concept'>('industry')
-  const { data, loading } = useTabData(() => getSectors(type), [type])
-  if (loading) return <div className="intel-loading">加载中...</div>
-  if (!data || (!data.sectors.length && data.warning)) return <div className="intel-loading">{data?.warning || '数据不可用'}</div>
+function SectorsTab() {
+  const { data, loading } = useTabData(() => getSectors('industry'), [])
+  if (loading) return <Loading />
+  if (!data) return <Loading msg="数据不可用" />
   return (
     <div>
-      <div className="sub-tabs">
-        {(['industry', 'concept'] as const).map(t => (
-          <button key={t} className={type === t ? 'active' : ''} onClick={() => setType(t)}>{t === 'industry' ? '行业板块' : '概念板块'}</button>
-        ))}
-      </div>
+      <Warn d={data} />
+      {!data.sectors.length && !data.warning && <Loading msg="无板块数据" />}
       <div className="sector-grid">
-        {(data?.sectors || []).map(s => {
+        {(data.sectors || []).map((s: SectorItem) => {
           const up = s.change_pct >= 0
           return (
-            <div key={s.code} className={`sector-card ${up ? 'up' : 'down'}`} onClick={() => onOpen(s.code, s.name)}>
+            <div key={s.code} className={`sector-card ${up ? 'up' : 'down'}`}>
               <div className="sector-name">{s.name}</div>
               <div className="sector-change">{up ? '+' : ''}{s.change_pct?.toFixed(2)}%</div>
             </div>
@@ -236,20 +231,20 @@ function SectorsTab({ onOpen }: { onOpen: (code: string, name: string) => void }
 
 function DragonTigerTab({ onOpen }: { onOpen: (code: string, name: string) => void }) {
   const { data, loading } = useTabData(() => getDragonTiger(), [])
-  if (loading) return <div className="intel-loading">加载中...</div>
-  if (!data || (!data.stocks.length && data.warning)) return <div className="intel-loading">{data?.warning || '当日龙虎榜尚未更新'}</div>
+  if (loading) return <Loading />
+  if (!data || !data.stocks.length) return <Loading msg={data?.warning || '龙虎榜盘后才有数据'} />
   return (
     <table className="intel-table">
-      <thead><tr><th>代码</th><th>名称</th><th>日期</th><th className="r">涨幅</th><th>上榜原因</th><th className="c"></th></tr></thead>
+      <thead><tr><th>代码</th><th>名称</th><th className="r">涨幅</th><th className="r">净买(亿)</th><th>上榜原因</th><th className="c"></th></tr></thead>
       <tbody>
         {data.stocks.map(s => (
-          <tr key={s.code + s.date} onClick={() => onOpen(s.code, s.name)}>
+          <tr key={s.code} onClick={() => onOpen(s.code, s.name)}>
             <td className="code">{s.code.split('.')[1]}</td>
             <td className="name">{s.name}</td>
-            <td className="muted">{s.date}</td>
             <td className="r" style={{ color: (s.change_pct || 0) >= 0 ? 'var(--up)' : 'var(--down)' }}>{s.change_pct?.toFixed(2)}%</td>
-            <td className="muted small">{s.reason}</td>
-            <td className="c accent">→</td>
+            <td className="r" style={{ color: (s.net_buy || 0) >= 0 ? 'var(--up)' : 'var(--down)' }}>{s.net_buy ? (s.net_buy * 1e-8).toFixed(2) : '-'}</td>
+            <td className="muted small">{s.reason || '-'}</td>
+            <td className="c accent">-></td>
           </tr>
         ))}
       </tbody>
@@ -258,15 +253,15 @@ function DragonTigerTab({ onOpen }: { onOpen: (code: string, name: string) => vo
 }
 
 const ANOMALY_COLOR: Record<string, string> = {
-  涨停: 'var(--up)', 跌停: 'var(--down)', 振幅异动: 'var(--gold)', 急涨: 'var(--up)', 急跌: 'var(--down)',
+  涨停: 'var(--up)', 跌停: 'var(--down)', 振幅异动: 'var(--gold)', 急涨: 'var(--up)', 急跌: 'var(--down)', 异动: 'var(--gold)',
 }
 
 function AnomaliesTab({ onOpen }: { onOpen: (code: string, name: string) => void }) {
-  const [filter, setFilter] = useState<string>('all')
   const { data, loading } = useTabData(() => getAnomalies(50), [])
-  if (loading) return <div className="intel-loading">加载中...</div>
-  if (!data || (!data.anomalies.length && data.warning)) return <div className="intel-loading">{data?.warning || '数据不可用'}</div>
+  if (loading) return <Loading />
+  if (!data || !data.anomalies.length) return <Loading msg={data?.warning || '无异动数据'} />
   const types = ['all', ...Array.from(new Set(data.anomalies.map(a => a.type)))]
+  const [filter, setFilter] = useState('all')
   const list = filter === 'all' ? data.anomalies : data.anomalies.filter(a => a.type === filter)
   return (
     <div>
@@ -274,17 +269,15 @@ function AnomaliesTab({ onOpen }: { onOpen: (code: string, name: string) => void
         {types.map(t => <button key={t} className={filter === t ? 'active' : ''} onClick={() => setFilter(t)}>{t === 'all' ? '全部' : t}</button>)}
       </div>
       <table className="intel-table">
-        <thead><tr><th>代码</th><th>名称</th><th className="r">涨幅</th><th className="r">振幅</th><th className="r">换手</th><th>类型</th><th className="c"></th></tr></thead>
+        <thead><tr><th>代码</th><th>名称</th><th>类型</th><th>异动原因</th><th className="c"></th></tr></thead>
         <tbody>
-          {list.map(a => (
-            <tr key={a.code + a.type} onClick={() => onOpen(a.code, a.name)}>
-              <td className="code">{a.code.split('.')[1]}</td>
+          {list.map((a, i) => (
+            <tr key={a.code + i} onClick={() => onOpen(a.code, a.name)}>
+              <td className="code">{a.code?.split('.')[1]}</td>
               <td className="name">{a.name}</td>
-              <td className="r" style={{ color: a.change_pct >= 0 ? 'var(--up)' : 'var(--down)' }}>{a.change_pct?.toFixed(2)}%</td>
-              <td className="r muted">{a.amplitude?.toFixed(2)}%</td>
-              <td className="r muted">{a.turnover?.toFixed(2)}%</td>
-              <td><span className="anomaly-badge" style={{ background: `${ANOMALY_COLOR[a.type] || 'var(--muted)'}33`, color: ANOMALY_COLOR[a.type] || 'var(--muted)' }}>{a.type}</span></td>
-              <td className="c accent">→</td>
+              <td><span className="anomaly-badge" style={{ background: `${ANOMALY_COLOR[a.type] || 'var(--gold)'}33`, color: ANOMALY_COLOR[a.type] || 'var(--gold)' }}>{a.type}</span></td>
+              <td className="muted small">{a.reason}</td>
+              <td className="c accent">-></td>
             </tr>
           ))}
         </tbody>
@@ -294,14 +287,14 @@ function AnomaliesTab({ onOpen }: { onOpen: (code: string, name: string) => void
 }
 
 function AnnouncementsTab({ onOpen }: { onOpen: (code: string, name: string) => void }) {
-  const { data, loading } = useTabData(() => getAnnouncements(20), [])
-  if (loading) return <div className="intel-loading">加载中...</div>
-  if (!data || (!data.announcements.length && data.warning)) return <div className="intel-loading">{data?.warning || '数据不可用'}</div>
+  const { data, loading } = useTabData(() => getAnnouncements(30), [])
+  if (loading) return <Loading />
+  if (!data || !data.announcements.length) return <Loading msg={data?.warning || '无热点数据'} />
   return (
     <div className="ann-list">
       {data.announcements.map((a, i) => (
         <div key={i} className="ann-item" onClick={() => onOpen(a.code, a.stock)}>
-          <div className="ann-head"><span className="ann-stock">{a.stock}</span><span className="ann-date">{a.date?.slice(0, 10)}</span></div>
+          <div className="ann-head"><span className="ann-stock">{a.stock}</span><span className="ann-date">{a.tag} {a.heat ? `· 热度${a.heat}` : ''}</span></div>
           <div className="ann-title">{a.title}</div>
         </div>
       ))}

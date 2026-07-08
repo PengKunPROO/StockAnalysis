@@ -29,11 +29,10 @@ export interface LimitUpStock {
   name: string
   price?: number
   change_pct?: number
+  limit_up_time?: string
+  reason?: string
   consecutive_days: number
   seal_amount?: number
-  broken_count: number
-  fund_flow?: number
-  amount?: number
 }
 
 export interface SectorItem {
@@ -55,7 +54,6 @@ export interface NorthFlow {
 export interface DragonTigerStock {
   code: string
   name: string
-  date: string
   reason: string
   change_pct?: number
   net_buy?: number
@@ -64,11 +62,10 @@ export interface DragonTigerStock {
 export interface Anomaly {
   code: string
   name: string
-  change_pct: number
-  amplitude?: number
-  turnover?: number
-  amount?: number
+  change_pct?: number | null
   type: string
+  reason: string
+  keywords?: string[]
 }
 
 export interface Announcement {
@@ -76,18 +73,20 @@ export interface Announcement {
   code: string
   title: string
   date: string
-  url?: string
+  tag?: string
+  heat?: number
 }
 
 export const getOverview = () => get<Overview>('/intelligence/overview')
-export const getLimitUp = () => get<{ stocks: LimitUpStock[]; buckets: Record<string, number>; count: number; warning?: string }>('/intelligence/limit-up')
-export const getFundFlow = (scope: 'industry' | 'concept' | 'north' | 'stock') =>
+export const getLimitUp = () =>
+  get<{ stocks: LimitUpStock[]; buckets: Record<string, number>; count: number; ladder?: any[]; warning?: string }>('/intelligence/limit-up')
+export const getFundFlow = (scope: 'north' | 'stock') =>
   get<Record<string, any>>(`/intelligence/fund-flow?scope=${scope}`)
 export const getSectors = (type: 'industry' | 'concept') =>
   get<{ sectors: SectorItem[]; type: string; warning?: string }>(`/intelligence/sectors?type=${type}`)
 export const getDragonTiger = (date = '') =>
   get<{ stocks: DragonTigerStock[]; count?: number; warning?: string }>(`/intelligence/dragon-tiger${date ? `?date=${date}` : ''}`)
-export const getAnomalies = (limit = 30) =>
+export const getAnomalies = (limit = 50) =>
   get<{ anomalies: Anomaly[]; count: number; warning?: string }>(`/intelligence/anomalies?limit=${limit}`)
-export const getAnnouncements = (limit = 15) =>
+export const getAnnouncements = (limit = 20) =>
   get<{ announcements: Announcement[]; count: number; warning?: string }>(`/intelligence/announcements?limit=${limit}`)
