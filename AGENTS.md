@@ -40,8 +40,8 @@ datasources (pull raw data) → DataEngine (cache-first via SQLite) → indicato
 ```
 - No pre-computed indicators in DB — store raw OHLCV, compute MACD/RSI/KDJ/BOLL/ATR/fibonacci at query time.
 - Datasources implement `DataSourceProtocol` (`backend/app/datasources/base.py`). Registry in `datasources/__init__.py` — order matters (first registered = primary for market).
-- Sources: `tonghuashun` (A-share, primary), `akshare` (A-share fallback), `yfinance` (US), `sample` (test/fake).
-- `eastmoney.py` is a supplementary crawler (NOT a protocol datasource) for PE/PB/fund-flow/sectors/north-bound/announcements/limit-up-pool/dragon-tiger. All methods degrade to empty/None, never raise.
+- Sources: `tonghuashun` (A-share, primary - 含全市场快照/涨停池/连板天梯/龙虎榜/异动/热榜/ticker-list/指数), `akshare` (A-share fallback), `yfinance` (US), `sample` (test/fake).
+- `eastmoney.py` 精简为仅 `fetch_north_bound`(kamt 北向资金,可达); 其余 push2/push2ex/datacenter 端点实测不可达, 市场快照/涨停/龙虎榜/异动/热榜/板块全部改用同花顺 Financial-API(见 tonghuashun.py)。All methods degrade, never raise.
 
 ### API routes
 All under `/api/v1/` — router tree: `backend/app/api/v1/router.py`. Endpoints: stocks, financial, search, index, health, indicators, skills, watchlist, diagnosis, news, signals, screener, intelligence.
