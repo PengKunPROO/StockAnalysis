@@ -344,3 +344,75 @@ a:hover { text-decoration: underline; }
 .results-table .muted2 { color: var(--muted); font-size: 0.6rem; }
 .sig-badge { background: var(--accent-glow); color: var(--accent); padding: 1px 5px; border-radius: 3px; font-size: 0.58rem; margin-right: 3px; }
 .empty-row { text-align: center; color: var(--muted); padding: 24px; font-size: 0.7rem; }
+
+/* === Intelligence View (市场情报) === */
+.intelligence-view { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.intel-dashboard { border-bottom: 1px solid var(--border); background: var(--surface2); }
+.index-cards { display: flex; gap: 8px; padding: 8px 12px; overflow-x: auto; }
+.index-card { min-width: 110px; background: var(--surface); border-radius: 6px; padding: 8px; text-align: center; border: 1px solid var(--border-light); }
+.index-card .idx-name { color: var(--muted); font-size: 0.65rem; }
+.index-card .idx-price { color: var(--heading); font-size: 1rem; font-weight: 700; font-family: var(--font-mono); }
+.index-card .idx-change { font-size: 0.7rem; font-weight: 600; }
+.stats-bar { display: flex; gap: 16px; padding: 5px 12px; border-top: 1px solid var(--border-light); font-size: 0.68rem; flex-wrap: wrap; align-items: center; }
+.stats-bar .up { color: var(--up); font-weight: 600; }
+.stats-bar .down { color: var(--down); font-weight: 600; }
+.stats-bar .gold { color: var(--gold); }
+.stats-bar .red-ratio { margin-left: auto; display: flex; align-items: center; gap: 6px; color: var(--heading); }
+.ratio-bar { width: 100px; height: 6px; background: var(--surface2); border-radius: 3px; overflow: hidden; }
+.ratio-fill { display: block; height: 100%; background: var(--up); border-radius: 3px; }
+.sentiment-bar { display: flex; gap: 24px; padding: 5px 12px; border-top: 1px solid var(--border-light); font-size: 0.68rem; flex-wrap: wrap; align-items: center; }
+.sent-item { display: flex; align-items: center; gap: 6px; }
+.sent-label { color: var(--muted); }
+.sent-bar { width: 100px; height: 8px; background: linear-gradient(to right, var(--down), var(--gold), var(--up)); border-radius: 4px; position: relative; }
+.sent-marker { position: absolute; top: -2px; width: 2px; height: 12px; background: var(--heading); transform: translateX(-1px); }
+.sent-value { font-weight: 700; }
+.sent-stat { color: var(--muted); }
+.sent-stat b { margin-left: 2px; }
+.intel-tabs { padding: 8px 12px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 6px; background: var(--surface); }
+.intel-title { color: var(--heading); font-weight: 700; font-size: 0.75rem; margin-right: 8px; }
+.intel-tabs button { padding: 3px 10px; border-radius: 4px; border: none; background: var(--surface2); color: var(--muted); font-size: 0.68rem; cursor: pointer; }
+.intel-tabs button.active { background: var(--up); color: #fff; font-weight: 700; }
+.intel-content { padding: 10px 14px; overflow-y: auto; flex: 1; }
+.intel-loading { padding: 24px; text-align: center; color: var(--muted); font-size: 0.75rem; }
+.bucket-row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
+.bucket { background: var(--surface2); border-radius: 6px; padding: 6px 14px; text-align: center; }
+.bucket.hot { background: rgba(239,68,68,0.15); }
+.bucket.fresh { background: rgba(6,214,160,0.12); }
+.bucket-num { color: var(--gold); font-weight: 700; font-size: 0.9rem; }
+.bucket.fresh .bucket-num { color: var(--accent); }
+.bucket-label { color: var(--muted); font-size: 0.58rem; }
+.bucket-total { color: var(--muted); font-size: 0.62rem; margin-left: 8px; }
+.intel-table { width: 100%; border-collapse: collapse; font-size: 0.7rem; }
+.intel-table th { padding: 5px 8px; text-align: left; color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--border); font-size: 0.62rem; }
+.intel-table th.r, .intel-table td.r { text-align: right; }
+.intel-table th.c, .intel-table td.c { text-align: center; }
+.intel-table td { padding: 5px 8px; border-bottom: 1px solid var(--border-light); }
+.intel-table tbody tr { cursor: pointer; }
+.intel-table tbody tr:hover { background: var(--accent-glow); }
+.intel-table .code { color: var(--muted); font-family: var(--font-mono); font-size: 0.62rem; }
+.intel-table .name { color: var(--heading); font-weight: 600; }
+.intel-table .up { color: var(--up); }
+.intel-table .down { color: var(--down); }
+.intel-table .accent { color: var(--accent); }
+.intel-table .muted { color: var(--muted); }
+.intel-table .muted.small { font-size: 0.6rem; }
+.sub-tabs { display: flex; gap: 4px; margin-bottom: 8px; }
+.sub-tabs button { padding: 2px 10px; border-radius: 4px; border: none; background: var(--surface2); color: var(--muted); font-size: 0.65rem; cursor: pointer; }
+.sub-tabs button.active { background: var(--accent); color: #000; font-weight: 700; }
+.sector-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 6px; }
+.sector-card { background: var(--surface2); border-radius: 6px; padding: 8px; cursor: pointer; border-left: 3px solid; transition: transform .1s; }
+.sector-card:hover { transform: translateY(-1px); }
+.sector-card.up { border-left-color: var(--up); }
+.sector-card.down { border-left-color: var(--down); }
+.sector-name { color: var(--heading); font-size: 0.68rem; font-weight: 600; }
+.sector-change { font-size: 0.72rem; font-weight: 700; font-family: var(--font-mono); }
+.sector-card.up .sector-change { color: var(--up); }
+.sector-card.down .sector-change { color: var(--down); }
+.anomaly-badge { padding: 1px 5px; border-radius: 3px; font-size: 0.58rem; font-weight: 600; }
+.ann-list { display: flex; flex-direction: column; gap: 6px; }
+.ann-item { background: var(--surface2); border-radius: 6px; padding: 8px 10px; cursor: pointer; transition: background .1s; }
+.ann-item:hover { background: var(--accent-glow); }
+.ann-head { display: flex; justify-content: space-between; margin-bottom: 3px; }
+.ann-stock { color: var(--accent); font-size: 0.68rem; font-weight: 600; }
+.ann-date { color: var(--muted); font-size: 0.6rem; }
+.ann-title { color: var(--heading); font-size: 0.72rem; line-height: 1.4; }

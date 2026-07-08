@@ -180,6 +180,67 @@ async def fetch_market_stats() -> dict | None:
     return {"sh_total": sh_total, "sz_total": sz_total}
 
 
+async def fetch_limit_up_pool(date_str: str = "") -> list[dict]:
+    """涨停股池 with 连板数 (push2ex ZTPool). date_str: YYYYMMDD (default today)."""
+    if not date_str:
+        from datetime import date
+        date_str = date.today().strftime("%Y%m%d")
+    data = await _get_json("http://push2ex.eastmoney.com/getTopicZTPool", {
+        "ut": "7eea3edcaed734bea9cb3f8e2d2a18cd",
+        "dpt": "wz.ztzt", "Ession": "128424500",
+        "date": date_str, "_": "0",
+    }, timeout=15.0)
+    if not data or data.get("rc") != 0:
+        return []
+    pool = (data.get("data") or {}).get("pool") or []
+    out = []
+    for p in pool:
+        zttj = p.get("zttj") or {}
+        out.append({
+            "code": f"{'sh' if str(p.get('c','')).startswith('6') else 'sz'}.{p.get('c')}",
+            "name": p.get("n") or "",
+            "price": _num(p.get("p")),
+            "change_pct": _num(p.get("zdp")),
+            "consecutive_days": _num(zttj.get("days")) or 1,
+            "seal_amount": _num(p.get("fbv")),
+            "broken_count": _num(p.get("zbc")) or 0,
+            "fund_flow": _num(p.get("fund")),
+            "amount": _num(p.get("amount")),
+        })
+    return out
+
+
+async def fetch_dragon_tiger(date_str: str = "", limit: int = 20) -> list[dict]:
+    """龙虎榜 (datacenter billboard). date_str: YYYY-MM-DD (default today)."""
+    if not date_str:
+        from datetime import date
+        date_str = date.today().isoformat()
+    data = await _get_json("https://datacenter-web.eastmoney.com/api/data/v1/get", {
+        "reportName": "RPT_DAILYBILLBOARD_DETAILS",
+        "columns": "ALL", "source": "WEB",
+        "sortColumns": "SECURITY_CODE", "sortTypes": "-1",
+        "pageSize": str(limit), "pageNumber": "1",
+        "filter": f"(TRADE_DATE='{date_str}')",
+    }, timeout=15.0)
+    if not data or data.get("success") is not True:
+        return []
+    rows = (data.get("result") or {}).get("data") or []
+    out = []
+    for r in rows:
+        code = r.get("SECURITY_CODE")
+        if not code:
+            continue
+        out.append({
+            "code": f"{'sh' if str(code).startswith('6') else 'sz'}.{code}",
+            "name": r.get("SECURITY_NAME_ABBR") or "",
+            "date": r.get("TRADE_DATE") or "",
+            "reason": r.get("EXPLAIN") or "",
+            "change_pct": _num(r.get("CHANGE_RATE")),
+            "net_buy": _num(r.get("NET")),
+        })
+    return out
+
+
 async def fetch_market_snapshot(limit: int = 2000) -> list[dict]:
     """Full A-share snapshot with screener fields (one bulk call).
 

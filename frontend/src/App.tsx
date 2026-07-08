@@ -12,6 +12,7 @@ import SkillManager from './components/SkillManager'
 import TopTabBar from './components/TopTabBar'
 import SignalsPanel from './components/SignalsPanel'
 import ScreenerView from './components/ScreenerView'
+import IntelligenceView from './components/IntelligenceView'
 
 function Sidebar() {
   const { state, dispatch } = useApp()
@@ -128,16 +129,6 @@ function StatusBar() {
   )
 }
 
-function PlaceholderView({ title, desc }: { title: string; desc: string }) {
-  return (
-    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)', fontSize: '1rem', flexDirection: 'column', gap: 8 }}>
-      <span style={{ fontSize: '2rem' }}>{title}</span>
-      {desc}
-      <span style={{ fontSize: '0.7rem', color: 'var(--muted)' }}>该模块将在后续阶段实现</span>
-    </div>
-  )
-}
-
 function AppShell() {
   const { state, dispatch } = useApp()
   const [skillOpen, setSkillOpen] = useState(false)
@@ -182,7 +173,7 @@ function AppShell() {
             </div>
           ))}
           {state.activeView === 'screener' && <ScreenerView />}
-          {state.activeView === 'intel' && <PlaceholderView title="🌐" desc="市场情报" />}
+          {state.activeView === 'intel' && <IntelligenceView />}
         </div>
         <StatusBar />
       </div>
