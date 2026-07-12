@@ -134,3 +134,28 @@ def test_smoke_index_snapshot():
 def test_smoke_anomaly_list():
     out = asyncio.run(_src().fetch_anomaly_list())
     assert isinstance(out, list)
+
+
+# ---------- kline pagination dedup ----------
+def test_kline_pagination_dedup(monkeypatch):
+    """fuyao API ignores offset param, returns same items every call.
+    fetch_kline must deduplicate and terminate, not infinite-loop."""
+    call_count = [0]
+
+    async def fake_get(self, path, params=None):
+        call_count[0] += 1
+        if call_count[0] > 3:
+            # Safety: should never reach here if dedup works
+            return {"item": []}
+        return {"item": [
+            {"date_ms": 1700000000000, "open_price": 10, "high_price": 11,
+             "low_price": 9, "close_price": 10.5, "volume": 1000, "turnover": 10000},
+            {"date_ms": 1700086400000, "open_price": 10.5, "high_price": 11.5,
+             "low_price": 10, "close_price": 11, "volume": 2000, "turnover": 22000},
+        ]}
+
+    monkeypatch.setattr("app.datasources.tonghuashun.TonghuashunSource._get", fake_get)
+    src = _src()
+    bars = asyncio.run(src.fetch_kline("sh.600519", "daily", "2023-01-01", "2023-12-31"))
+    assert len(bars) == 2  # deduped, not duplicated
+    assert call_count[0] == 2  # second call returned only dupes -> broke loop

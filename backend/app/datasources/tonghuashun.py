@@ -93,6 +93,7 @@ class TonghuashunSource:
             ths = self._to_ths_code(code)
             interval_map = {"daily": "1d", "weekly": "1w", "monthly": "1m"}
             all_items = []
+            seen_dates = set()
             offset = 0
             while True:
                 data = await self._get("/api/a-share/prices/historical", {
@@ -105,8 +106,16 @@ class TonghuashunSource:
                 items = data.get("item", [])
                 if not items:
                     break
-                all_items.extend(items)
+                # Deduplicate: fuyao API ignores offset and returns same items
+                new_items = [it for it in items if it.get("date_ms") not in seen_dates]
+                if not new_items:
+                    break
+                for it in new_items:
+                    seen_dates.add(it.get("date_ms"))
+                all_items.extend(new_items)
                 offset += len(items)
+                if len(new_items) < len(items):
+                    break
             return [
                 KlineBar(
                     date=_ms_to_date(int(b["date_ms"])),
