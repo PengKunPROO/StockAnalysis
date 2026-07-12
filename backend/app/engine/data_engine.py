@@ -85,14 +85,16 @@ class DataEngine:
 
     async def get_realtime(self, code: str) -> tuple[dict | None, str | None]:
         market = self._market_from_code(code)
-        # Try all sources in order - skip sample for realtime (fake data)
         sources = get_all_sources_for_market(market)
         if not sources:
             return None, f"No datasource for market: {market}"
 
+        tried_any = False
+        had_error = False
         for source in sources:
             if source.name == "sample":
                 continue
+            tried_any = True
             try:
                 quote = await source.fetch_realtime(code)
                 if quote is None:
@@ -104,9 +106,16 @@ class DataEngine:
                     "low": quote.low, "timestamp": quote.timestamp,
                 }, None
             except Exception as e:
+                had_error = True
                 logger.error(f"Failed to fetch realtime for {code} via {source.name}: {e}")
 
-        return None, "Data source temporarily unavailable"
+        if not tried_any:
+            return None, None
+        # If sources returned None without errors, stock doesn't exist (404)
+        # If sources had errors, it's a temporary issue (503)
+        if had_error:
+            return None, "Data source temporarily unavailable"
+        return None, None  # not found
 
     async def get_financial(self, code: str) -> tuple[dict | None, str | None]:
         factory = get_session_factory()

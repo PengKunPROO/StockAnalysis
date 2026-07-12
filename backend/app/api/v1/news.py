@@ -92,6 +92,7 @@ async def get_news(
                 for n in cached
             ]
             news_list = _filter_recent(news_list, days)
+            news_list = news_list[:limit]
             return {"code": code, "news": news_list, "cached": True}
 
     result, _ = await _fetch_and_cache_news(code, limit)
