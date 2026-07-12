@@ -41,7 +41,9 @@ datasources (pull raw data) → DataEngine (cache-first via SQLite) → indicato
 - No pre-computed indicators in DB — store raw OHLCV, compute MACD/RSI/KDJ/BOLL/ATR/fibonacci at query time.
 - Datasources implement `DataSourceProtocol` (`backend/app/datasources/base.py`). Registry in `datasources/__init__.py` — order matters (first registered = primary for market).
 - Sources: `tonghuashun` (A-share, primary - 含全市场快照/涨停池/连板天梯/龙虎榜/异动/热榜/ticker-list/指数), `akshare` (A-share fallback), `yfinance` (US), `sample` (test/fake).
-- `eastmoney.py` 精简为仅 `fetch_north_bound`(kamt 北向资金,可达); 其余 push2/push2ex/datacenter 端点实测不可达, 市场快照/涨停/龙虎榜/异动/热榜/板块全部改用同花顺 Financial-API(见 tonghuashun.py)。All methods degrade, never raise.
+- **SampleSource 铁律**: `sample` 源仅用于开发兜底，**永远不可缓存到 DB**。`data_engine.py` 检测 `source.name == "sample"` 时跳过 `upsert_daily_klines`，只返回内存数据 + warning。`get_realtime`/`get_financial`/`get_news` 也跳过 sample 源。假数据一旦缓存到 DB，会永久污染后续所有请求（K线、指标、信号、AI解读全部基于假数据）。
+- `eastmoney.py` 提供 `fetch_north_bound`(kamt 北向资金), `fetch_sector_rank`(push2 clist 行业/概念板块排行), `fetch_announcements`(np-anotice-stock 公告)。All methods degrade, never raise.
+- **同花顺 fuyao API 分页陷阱**: `/api/a-share/prices/historical` 接口忽略 `offset` 参数，每次返回相同全量数据。`fetch_kline` 必须用 `date_ms` 去重并在无新数据时 `break`，否则 `while True` 分页循环会无限运行直到 `asyncio.wait_for(timeout=8s)` 超时。
 
 ### API routes
 All under `/api/v1/` — router tree: `backend/app/api/v1/router.py`. Endpoints: stocks, financial, search, index, health, indicators, skills, watchlist, diagnosis, news, signals, screener, intelligence.
