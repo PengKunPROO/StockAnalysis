@@ -1,13 +1,16 @@
 """FastAPI application entry point."""
 import uuid
 import logging
-import signal
-import sys
 import os
+import threading
+import webbrowser
+from pathlib import Path
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from app.api.v1.router import router as v1_router
 from app.db.database import init_db, dispose_engine
 from app.engine.data_engine import engine
@@ -15,6 +18,9 @@ from app.engine.scheduler import start_scheduler, scheduler
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Auto-open browser on startup (only when not in debug/reload mode)
+_open_browser = os.environ.get("STOCK_AGENT_NO_BROWSER") != "1"
 
 
 @asynccontextmanager
@@ -28,16 +34,23 @@ async def lifespan(app: FastAPI):
         logger.warning(f"Scheduler not started: {e}")
     health = await engine.health()
     logger.info(f"Startup health: {health}")
+
+    # Auto-open browser after short delay
+    if _open_browser:
+        def _open():
+            import time
+            time.sleep(1.5)
+            webbrowser.open("http://localhost:8002")
+        threading.Thread(target=_open, daemon=True).start()
+
     yield
     logger.info("Shutting down...")
-    # Clean shutdown: stop scheduler
     try:
         if scheduler.running:
             scheduler.shutdown(wait=False)
             logger.info("Scheduler stopped")
     except Exception as e:
         logger.warning(f"Scheduler shutdown error: {e}")
-    # Clean shutdown: dispose DB engine (close all pool connections)
     try:
         await dispose_engine()
         logger.info("Database engine disposed")
@@ -71,6 +84,27 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 
+# Mount frontend static files (built by `npm run build`)
+_STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
+if _STATIC_DIR.exists():
+    app.mount("/assets", StaticFiles(directory=_STATIC_DIR / "assets"), name="assets")
+
+
 @app.get("/")
 async def root():
+    # Serve frontend index.html if it exists, otherwise return API info
+    index = _STATIC_DIR / "index.html"
+    if index.exists():
+        return FileResponse(index)
     return {"app": "Stock Agent", "version": "0.1.0", "docs": "/docs"}
+
+
+# SPA fallback: any non-API route returns index.html
+@app.get("/{full_path:path}")
+async def spa_fallback(full_path: str):
+    if full_path.startswith("api/"):
+        return JSONResponse(status_code=404, content={"error": "Not found"})
+    index = _STATIC_DIR / "index.html"
+    if index.exists():
+        return FileResponse(index)
+    return JSONResponse(status_code=404, content={"error": "Frontend not built. Run: cd frontend && npm run build"})

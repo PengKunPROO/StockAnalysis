@@ -101,4 +101,5 @@ export interface WatchlistItem {
   market: string
   price?: number
   changePct?: number
+  group_name?: string
 }

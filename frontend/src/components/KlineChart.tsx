@@ -112,29 +112,6 @@ export default function KlineChart() {
     }
     load()
   }
-    }
-    load()
-  }, [state.currentStock?.code])
-
-  const refresh = () => {
-    const code = state.currentStock?.code
-    if (!code) return
-    // reset reqId to force accept the next response
-    const id = ++reqIdRef.current
-    setLoading(true)
-    const load = async () => {
-      const end = today()
-      const start = `${parseInt(end.slice(0, 4)) - 1}${end.slice(4)}`
-      try {
-        const { data } = await getKline(code, 'daily', start, end)
-        if (id !== reqIdRef.current) return
-        candleRef.current?.setData(data.map((d: KlineBar) => ({ time: d.date, open: d.open, high: d.high, low: d.low, close: d.close })))
-        volRef.current?.setData(data.map((d: KlineBar) => ({ time: d.date, value: d.volume, color: d.close >= d.open ? 'rgba(38,166,154,0.3)' : 'rgba(239,83,80,0.3)' })))
-        chartRef.current?.timeScale().fitContent()
-      } finally { if (id === reqIdRef.current) setLoading(false) }
-    }
-    load()
-  }
 
   // Draw support/resistance/fibonacci price lines from signals
   useEffect(() => {

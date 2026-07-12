@@ -13,7 +13,7 @@ export default function SearchBar() {
   const { state, dispatch } = useApp()
   const ref = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
-  const timer = useRef<ReturnType<typeof setTimeout>>()
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
@@ -35,7 +35,7 @@ export default function SearchBar() {
   const handleChange = (v: string) => {
     setQuery(v)
     setActiveIdx(-1)
-    clearTimeout(timer.current)
+    if (timer.current) clearTimeout(timer.current)
     timer.current = setTimeout(() => doSearch(v), 250)
   }
 
