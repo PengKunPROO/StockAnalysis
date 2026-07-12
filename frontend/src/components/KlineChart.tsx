@@ -16,8 +16,9 @@ export default function KlineChart() {
   const priceLinesRef = useRef<any[]>([])
   const [loading, setLoading] = useState(false)
   const [showLevels, setShowLevels] = useState(true)
+  const [errorMsg, setErrorMsg] = useState('')
 
-  // Create chart once on mount — never destroy on stock switch
+  // Create chart once on mount - never destroy on stock switch
   useEffect(() => {
     if (!containerRef.current || chartRef.current) return
 
@@ -49,26 +50,68 @@ export default function KlineChart() {
 
     const id = ++reqIdRef.current
     setLoading(true)
+    setErrorMsg('')
 
     const load = async () => {
       const end = today()
-      const start = `${parseInt(end.slice(0, 4)) - 1}${end.slice(4)}`
+      const start = `${parseInt(end.slice(0, 4)) - 2}${end.slice(4)}`
       try {
-        const { data } = await getKline(code, 'daily', start, end)
+        const res = await getKline(code, 'daily', start, end)
         if (id !== reqIdRef.current) return // stale
+        const data = res.data || []
+        if (data.length === 0) {
+          setErrorMsg(res.warning || '暂无K线数据')
+          candleRef.current?.setData([])
+          volRef.current?.setData([])
+          return
+        }
         const candles = data.map((d: KlineBar) => ({
-          time: d.date, open: d.open, high: d.high, low: d.low, close: d.close,
+          time: d.date as any, open: d.open, high: d.high, low: d.low, close: d.close,
         }))
         const volumes = data.map((d: KlineBar) => ({
-          time: d.date, value: d.volume,
+          time: d.date as any, value: d.volume,
           color: d.close >= d.open ? 'rgba(38,166,154,0.3)' : 'rgba(239,83,80,0.3)',
         }))
         candleRef.current?.setData(candles)
         volRef.current?.setData(volumes)
         chartRef.current?.timeScale().fitContent()
+        if (res.warning) setErrorMsg(res.warning)
+      } catch (e: any) {
+        if (id === reqIdRef.current) setErrorMsg('K线数据加载失败: ' + (e.message || '未知错误'))
       } finally {
         if (id === reqIdRef.current) setLoading(false)
       }
+    }
+    load()
+  }, [state.currentStock?.code])
+
+  const refresh = () => {
+    const code = state.currentStock?.code
+    if (!code) return
+    const id = ++reqIdRef.current
+    setLoading(true)
+    setErrorMsg('')
+    const load = async () => {
+      const end = today()
+      const start = `${parseInt(end.slice(0, 4)) - 2}${end.slice(4)}`
+      try {
+        const res = await getKline(code, 'daily', start, end)
+        if (id !== reqIdRef.current) return
+        const data = res.data || []
+        if (data.length === 0) {
+          setErrorMsg(res.warning || '暂无K线数据')
+          return
+        }
+        candleRef.current?.setData(data.map((d: KlineBar) => ({ time: d.date as any, open: d.open, high: d.high, low: d.low, close: d.close })))
+        volRef.current?.setData(data.map((d: KlineBar) => ({ time: d.date as any, value: d.volume, color: d.close >= d.open ? 'rgba(38,166,154,0.3)' : 'rgba(239,83,80,0.3)' })))
+        chartRef.current?.timeScale().fitContent()
+        if (res.warning) setErrorMsg(res.warning)
+      } catch (e: any) {
+        if (id === reqIdRef.current) setErrorMsg('刷新失败: ' + (e.message || ''))
+      } finally { if (id === reqIdRef.current) setLoading(false) }
+    }
+    load()
+  }
     }
     load()
   }, [state.currentStock?.code])
@@ -124,6 +167,11 @@ export default function KlineChart() {
   return (
     <div className="kline-container" style={{ position: 'relative' }}>
       <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
+      {errorMsg && (
+        <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', color: 'var(--muted)', fontSize: 12, textAlign: 'center', pointerEvents: 'none' }}>
+          {errorMsg}
+        </div>
+      )}
       <button onClick={refresh} disabled={loading}
         style={{ position: 'absolute', top: 6, right: 8, zIndex: 10, padding: '2px 8px', borderRadius: 4, border: '1px solid var(--border)', background: 'rgba(10,10,32,.8)', color: loading ? 'var(--muted)' : 'var(--accent)', fontSize: 10, cursor: loading ? 'default' : 'pointer' }}
         title="刷新K线数据">{loading ? '加载中...' : '↻ 刷新'}</button>

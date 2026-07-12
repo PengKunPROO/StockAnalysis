@@ -117,3 +117,40 @@ async def fetch_announcements(code: str, limit: int = 20) -> list[dict]:
             "url": f"https://data.eastmoney.com/notices/detail/{parts[1]}/{r.get('art_code', '')}.html",
         })
     return out
+
+
+async def fetch_cls_news(code: str, limit: int = 20) -> list[dict]:
+    """财联社电报新闻。使用 cls.cn 搜索 API。全 try/except 降级。"""
+    parts = code.split(".")
+    if len(parts) != 2:
+        return []
+    raw_code = parts[1]
+    # 财联社搜索 API
+    data = await _get_json("https://www.cls.cn/api/sw/search", {
+        "app": "CailianpressWeb",
+        "os": "web",
+        "sv": "8.4.6",
+        "keyword": raw_code,
+    }, timeout=8.0)
+    if not data:
+        return []
+    # 财联社返回结构可能不固定,尝试多种解析路径
+    roll_data = (data.get("data") or {}).get("roll_data") or []
+    if not roll_data:
+        # 尝试另一种结构
+        roll_data = (data.get("data") or {}).get("search_result") or []
+    out = []
+    for r in roll_data[:limit]:
+        if not isinstance(r, dict):
+            continue
+        title = r.get("title") or r.get("content", "")[:80] or ""
+        if not title:
+            continue
+        out.append({
+            "title": title,
+            "source": "财联社",
+            "url": f"https://www.cls.cn/detail/{r.get('id', '')}",
+            "summary": (r.get("content") or "")[:500],
+            "published_at": (r.get("ctime") or r.get("published_at") or "")[:19] if isinstance(r.get("ctime") or r.get("published_at"), str) else "",
+        })
+    return out

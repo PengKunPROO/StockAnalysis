@@ -27,10 +27,15 @@ def _filter_recent(articles: list[dict], days: int) -> list[dict]:
 
 async def _fetch_and_cache_news(code: str, limit: int = 10):
     today = date.today()
-    articles, error = await data_engine.get_news(code, limit=max(limit * 3, 20))
+    # Fetch more articles to ensure enough after filtering
+    fetch_limit = max(limit * 5, 50)
+    articles, error = await data_engine.get_news(code, limit=fetch_limit)
 
     if not articles:
         return {"code": code, "news": [], "cached": False, "error": error or "暂未找到相关新闻"}, []
+
+    # Sort by published_at descending (newest first)
+    articles.sort(key=lambda a: a.get("published_at", ""), reverse=True)
 
     factory = get_session_factory()
     async with factory() as session:
@@ -70,8 +75,8 @@ async def get_news(
             )
             await session.commit()
         result, _ = await _fetch_and_cache_news(code, limit)
-        # Filter by days
         result["news"] = _filter_recent(result["news"], days)
+        result["news"].sort(key=lambda a: a.get("published_at", ""), reverse=True)
         return result
 
     async with factory() as session:
@@ -79,7 +84,7 @@ async def get_news(
             select(StockNews).where(
                 StockNews.stock_code == code,
                 StockNews.fetched_at == today,
-            ).order_by(StockNews.id.desc())
+            ).order_by(StockNews.published_at.desc())
         )
         cached = result.scalars().all()
         if cached:

@@ -130,7 +130,7 @@ async def ai_interpret(code: str, days: int = 90):
                             {"role": "user", "content": user_prompt},
                         ],
                         "temperature": 0.4,
-                        "max_tokens": 1200,
+                        "max_tokens": 4096,
                         "stream": True,
                     },
                 ) as resp:

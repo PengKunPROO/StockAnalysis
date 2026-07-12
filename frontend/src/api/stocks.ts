@@ -5,7 +5,7 @@ export const searchStocks = (q: string) =>
   get<{ results: StockInfo[]; count: number }>(`/search?q=${encodeURIComponent(q)}`)
 
 export const getKline = (code: string, period = 'daily', start = '2024-01-01', end = '2026-12-31') =>
-  get<{ code: string; data: KlineBar[] }>(`/stock/${code}/kline?period=${period}&start=${start}&end=${end}`)
+  get<{ code: string; data: KlineBar[]; count: number; warning?: string }>(`/stock/${code}/kline?period=${period}&start=${start}&end=${end}`)
 
 export const getIndicators = (code: string, days = 60) =>
   get<{ code: string; data: IndicatorPoint[] }>(`/stock/${code}/indicators?days=${days}`)

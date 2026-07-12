@@ -191,29 +191,55 @@ class DataEngine:
 
     async def get_news(self, code: str, limit: int = 5) -> tuple[list[dict], str | None]:
         from app.datasources import get_all_sources_for_market
+        from app.datasources import eastmoney
         market = self._market_from_code(code)
         sources = get_all_sources_for_market(market)
         if not sources:
             return [], f"No datasource for market: {market}"
 
+        all_articles = []
+
+        # 1. Fetch from akshare (primary news source)
         for source in sources:
             if source.name == "sample":
                 continue
             try:
                 articles = await source.fetch_news(code, limit)
                 if articles:
-                    return [
+                    all_articles.extend([
                         {
                             "title": a.title, "source": a.source,
                             "url": a.url, "summary": a.summary,
                             "published_at": a.published_at,
                         }
                         for a in articles[:limit]
-                    ], None
+                    ])
+                    break
             except Exception as e:
                 logger.error(f"News fetch failed for {code} via {source.name}: {e}")
 
-        return [], "暂未找到相关新闻"
+        # 2. Fetch from 财联社 (cls) as supplementary source
+        try:
+            cls_news = await eastmoney.fetch_cls_news(code, limit=limit)
+            if cls_news:
+                all_articles.extend(cls_news)
+        except Exception as e:
+            logger.warning(f"CLS news fetch failed for {code}: {e}")
+
+        if not all_articles:
+            return [], "暂未找到相关新闻"
+
+        # Deduplicate by title and sort by published_at descending
+        seen_titles = set()
+        unique = []
+        for a in all_articles:
+            t = a.get("title", "")
+            if t and t not in seen_titles:
+                seen_titles.add(t)
+                unique.append(a)
+        unique.sort(key=lambda a: a.get("published_at", ""), reverse=True)
+
+        return unique[:limit * 2], None  # Return more than requested for filtering
 
     async def health(self) -> dict:
         healthy = get_healthy_sources()
