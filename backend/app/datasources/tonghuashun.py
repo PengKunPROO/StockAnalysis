@@ -136,9 +136,13 @@ class TonghuashunSource:
                 price = prev  # fallback to previous close when market is closed
             if price is None:
                 price = 0
+            # Use name from API if available; fallback to searching ticker list
+            name = item.get("name", "")
+            if not name:
+                name = await self._lookup_name(code)
             return RealtimeQuote(
                 code=code,
-                name=item.get("thscode", code),
+                name=name or code,
                 price=float(price),
                 change_pct=round(float(item.get("price_change_ratio_pct") or 0), 2),
                 volume=int(float(item.get("volume") or 0)),
@@ -148,6 +152,19 @@ class TonghuashunSource:
             )
         except Exception:
             return None
+
+    async def _lookup_name(self, code: str) -> str:
+        """Lookup stock name from ticker list (cached)."""
+        if not hasattr(self, "_name_cache"):
+            self._name_cache = {}
+        if code in self._name_cache:
+            return self._name_cache[code]
+        try:
+            tickers = await self.fetch_ticker_list(asset_type="a-share", limit=5000)
+            self._name_cache = {t["code"]: t["name"] for t in tickers if t.get("code")}
+            return self._name_cache.get(code, "")
+        except Exception:
+            return ""
 
     async def fetch_financials(self, code: str) -> FinancialReport | None:
         try:
@@ -239,8 +256,8 @@ class TonghuashunSource:
     async def fetch_dragon_tiger(self, date: str = "", board_type: str = "all") -> list[dict]:
         """龙虎榜 (special-data/dragon-tiger-list). date=YYYYMMDD, board_type=all/inst/hot."""
         if not date:
-            from datetime import date as _d, timedelta
-            date = (_d.today() - timedelta(days=1)).strftime("%Y%m%d")
+            from datetime import date as _d
+            date = _d.today().strftime("%Y%m%d")
         try:
             data = await self._get("/api/a-share/special-data/dragon-tiger-list", {
                 "trade_date": date, "board_type": board_type, "page": 1, "size": 100,
@@ -302,6 +319,12 @@ class TonghuashunSource:
 
     # ---- response parsers (snake_case, code normalized to sh.X / sz.X) ----
     def _parse_quote(self, it: dict) -> dict:
+        high = _safe_float(it.get("high_price"))
+        low = _safe_float(it.get("low_price"))
+        prev_close = _safe_float(it.get("prev_price"))
+        amplitude = None
+        if high is not None and low is not None and prev_close and prev_close > 0:
+            amplitude = round((high - low) / prev_close * 100, 2)
         return {
             "code": self._to_our_code(it.get("thscode", "")),
             "name": it.get("name", "") or "",
@@ -310,9 +333,10 @@ class TonghuashunSource:
             "volume": _safe_float(it.get("volume")),
             "amount": _safe_float(it.get("turnover")),  # fuyao turnover = 成交额
             "open": _safe_float(it.get("open_price")),
-            "high": _safe_float(it.get("high_price")),
-            "low": _safe_float(it.get("low_price")),
-            "prev_close": _safe_float(it.get("prev_price")),
+            "high": high,
+            "low": low,
+            "prev_close": prev_close,
+            "amplitude": amplitude,  # computed: (high-low)/prev_close*100
         }
 
     def _parse_limit_up(self, it: dict) -> dict:

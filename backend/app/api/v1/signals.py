@@ -25,6 +25,25 @@ async def _load_context(code: str, days: int = 90):
     return window, indicators, fibonacci, warn
 
 
+async def _get_stock_name(code: str) -> str:
+    """Get stock name from realtime data or ticker list."""
+    try:
+        rt, _ = await engine.get_realtime(code)
+        if rt and rt.get("name"):
+            return rt["name"]
+    except Exception:
+        pass
+    # Fallback: search
+    try:
+        results, _ = await engine.search(code.split(".")[-1])
+        for r in results:
+            if r.get("code") == code:
+                return r.get("name", code)
+    except Exception:
+        pass
+    return code
+
+
 @router.get("/{code}")
 async def get_signals(code: str, days: int = 90):
     klines, indicators, fibonacci, warn = await _load_context(code, days)
@@ -47,8 +66,10 @@ async def ai_interpret(code: str, days: int = 90):
 
     recent = indicators[-10:] if indicators else []
     close = klines[-1]["close"]
+    stock_name = await _get_stock_name(code)
     context = {
         "code": code,
+        "name": stock_name,
         "close": close,
         "signals": payload["active_signals"],
         "score": payload["score"],
@@ -78,7 +99,7 @@ async def ai_interpret(code: str, days: int = 90):
         "3) 给出明确的买入区间、止损价、目标价、仓位；4) 结尾必须附风险提示。"
     )
     user_prompt = (
-        f"股票代码: {code}\n当前价: {close}\n\n"
+        f"股票: {stock_name}({code})\n当前价: {close}\n\n"
         f"规则信号数据(JSON):\n{json.dumps(context, ensure_ascii=False, indent=2)}\n\n"
         "请基于以上数据给出操作建议解读。"
     )

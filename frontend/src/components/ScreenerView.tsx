@@ -5,9 +5,8 @@ import type { FilterField, ScreenerSkill, ScreenResult, FieldValue } from '../ap
 
 const SORT_OPTIONS = [
   { value: 'change_pct', label: '涨跌幅' },
+  { value: 'amplitude', label: '振幅' },
   { value: 'roe', label: 'ROE' },
-  { value: 'pe_ttm', label: '市盈率' },
-  { value: 'turnover', label: '换手率' },
   { value: 'amount', label: '成交额' },
 ]
 

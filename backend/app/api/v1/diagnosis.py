@@ -114,6 +114,7 @@ async def chat(req: ChatRequest):
 3. 数据返回 JSON，提取相关字段分析
 4. 用 Markdown 表格呈现关键指标
 5. 给出客观分析，不做买卖建议
+6. 如果 curl 返回空数据或错误，明确说明"数据获取失败"，绝不编造价格或指标
 
 用户问题: {req.message}
 """

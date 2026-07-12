@@ -49,13 +49,13 @@ def test_fund_flow_industry_422(client):
 
 
 def test_sectors_degraded(client):
-    """板块轮动: 同花顺无行业板块接口 -> 降级 warning。"""
+    """板块轮动: 使用东财 push2 clist 获取行业板块排行。降级时返回 warning。"""
     r = client.get("/api/v1/intelligence/sectors?type=industry")
     _assert_200(r)
     data = r.json()
     assert "sectors" in data
-    # 无数据源时返回降级 warning
-    assert data.get("warning") or data.get("sectors") == []
+    # 有数据时返回 sectors 列表，无数据时返回降级 warning
+    assert data.get("sectors") or data.get("warning")
 
 
 def test_dragon_tiger_structure(client):

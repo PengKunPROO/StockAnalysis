@@ -28,7 +28,8 @@ def test_pe_pb_marked_unavailable():
     assert by_name["pb"].available is False
     assert by_name["total_market_cap"].available is False
     assert by_name["turnover"].available is False
-    assert by_name["amplitude"].available is False
+    # amplitude is now computed from (high-low)/prev_close*100 - available
+    assert by_name["amplitude"].available is True
     # 可用字段
     assert by_name["change_pct"].available is True
     assert by_name["amount"].available is True

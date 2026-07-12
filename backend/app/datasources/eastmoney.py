@@ -1,8 +1,10 @@
-"""East Money supplementary crawler (精简版).
+"""East Money supplementary crawler.
 
-实测仅 `kamt.kline`（北向资金）端点在此环境可达。
-其余 push2 clist/push2ex/datacenter/anno 端点不可达，对应功能已改用
-同花顺 Financial-API（见 tonghuashun.py）。本模块仅保留北向资金。
+提供:
+- 北向资金 (kamt.kline 端点)
+- 行业/概念板块排行 (push2 clist 端点)
+- 个股公告 (np-anotice-stock 端点)
+
 所有方法优雅降级：失败返回空，绝不抛异常。
 """
 import httpx
@@ -47,5 +49,71 @@ async def fetch_north_bound(days: int = 10) -> list[dict]:
             "sh_connect_net": _num(r[1]),
             "sz_connect_net": _num(r[2]),
             "total_net": _num(r[3]),
+        })
+    return out
+
+
+async def fetch_sector_rank(board: str = "industry", limit: int = 30) -> list[dict]:
+    """行业/概念板块涨跌幅排行。
+
+    board: "industry" (行业板块) or "concept" (概念板块)
+    使用东财 push2 clist 端点。全 try/except 降级。
+    """
+    fs_map = {
+        "industry": "m:90+t:2",
+        "concept": "m:90+t:3",
+    }
+    fs = fs_map.get(board, fs_map["industry"])
+    data = await _get_json(f"{KAMT}/api/qt/clist/get", {
+        "pn": "1", "pz": str(limit),
+        "po": "1", "np": "1",
+        "fltt": "2",
+        "invt": "2",
+        "fid": "f3",
+        "fs": fs,
+        "fields": "f2,f3,f4,f8,f12,f14,f104,f128,f140",
+    })
+    if not data or data.get("rc") != 0:
+        return []
+    rows = (data.get("data") or {}).get("diff") or []
+    out = []
+    for r in rows:
+        if not isinstance(r, dict):
+            continue
+        out.append({
+            "code": r.get("f12", ""),
+            "name": r.get("f14", ""),
+            "change_pct": _num(r.get("f3")),
+            "amount": _num(r.get("f104")),
+            "volume": _num(r.get("f4")),
+            "turnover_rate": _num(r.get("f8")),
+            "leader_stock": r.get("f128", ""),
+        })
+    return out
+
+
+async def fetch_announcements(code: str, limit: int = 20) -> list[dict]:
+    """个股公告列表。使用东财 datacenter 端点。全 try/except 降级。"""
+    parts = code.split(".")
+    if len(parts) != 2:
+        return []
+    data = await _get_json("https://np-anotice-stock.eastmoney.com/api/security/ann", {
+        "sr": "-1",
+        "page_size": str(limit),
+        "page_index": "1",
+        "ann_type": "A",
+        "client_source": "web",
+        "stock_list": parts[1],
+    })
+    if not data:
+        return []
+    rows = (data.get("data") or {}).get("list") or []
+    out = []
+    for r in rows:
+        out.append({
+            "title": r.get("title", ""),
+            "date": (r.get("notice_date") or "")[:10],
+            "type": r.get("ann_type", ""),
+            "url": f"https://data.eastmoney.com/notices/detail/{parts[1]}/{r.get('art_code', '')}.html",
         })
     return out

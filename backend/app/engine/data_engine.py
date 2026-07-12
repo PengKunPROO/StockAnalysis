@@ -36,18 +36,32 @@ class DataEngine:
                 return cached or [], f"No datasource for market: {market}"
 
             bars = []
+            source_name = None
             for source in sources:
                 try:
                     bars = await asyncio.wait_for(
                         source.fetch_kline(code, period, start, end), timeout=8
                     )
                     if bars:
+                        source_name = source.name
                         break
                 except (asyncio.TimeoutError, Exception) as e:
                     logger.warning(f"Kline fetch failed via {source.name} for {code}: {e}")
 
             if not bars:
                 return cached or [], "Data source temporarily unavailable"
+
+            # Never cache sample/fake data to DB - only persist real source data
+            if source_name == "sample":
+                logger.info(f"Returning sample data for {code} (not cached to DB)")
+                return [
+                    {
+                        "date": b.date,
+                        "open": b.open, "high": b.high, "low": b.low,
+                        "close": b.close, "volume": b.volume, "amount": b.amount,
+                    }
+                    for b in bars
+                ], "使用模拟数据（真实数据源暂不可用）"
 
             bar_dicts = [
                 {
@@ -71,23 +85,28 @@ class DataEngine:
 
     async def get_realtime(self, code: str) -> tuple[dict | None, str | None]:
         market = self._market_from_code(code)
-        source = get_source_for_market(market)
-        if source is None:
+        # Try all sources in order - skip sample for realtime (fake data)
+        sources = get_all_sources_for_market(market)
+        if not sources:
             return None, f"No datasource for market: {market}"
 
-        try:
-            quote = await source.fetch_realtime(code)
-            if quote is None:
-                return None, None
-            return {
-                "code": quote.code, "name": quote.name,
-                "price": quote.price, "change_pct": quote.change_pct,
-                "volume": quote.volume, "high": quote.high,
-                "low": quote.low, "timestamp": quote.timestamp,
-            }, None
-        except Exception as e:
-            logger.error(f"Failed to fetch realtime for {code}: {e}")
-            return None, f"Data source temporarily unavailable"
+        for source in sources:
+            if source.name == "sample":
+                continue
+            try:
+                quote = await source.fetch_realtime(code)
+                if quote is None:
+                    continue
+                return {
+                    "code": quote.code, "name": quote.name,
+                    "price": quote.price, "change_pct": quote.change_pct,
+                    "volume": quote.volume, "high": quote.high,
+                    "low": quote.low, "timestamp": quote.timestamp,
+                }, None
+            except Exception as e:
+                logger.error(f"Failed to fetch realtime for {code} via {source.name}: {e}")
+
+        return None, "Data source temporarily unavailable"
 
     async def get_financial(self, code: str) -> tuple[dict | None, str | None]:
         factory = get_session_factory()
@@ -97,32 +116,36 @@ class DataEngine:
                 return cached, None
 
             market = self._market_from_code(code)
-            source = get_source_for_market(market)
-            if source is None:
+            sources = get_all_sources_for_market(market)
+            if not sources:
                 return None, f"No datasource for market: {market}"
 
-            try:
-                report = await source.fetch_financials(code)
-                if report is None:
-                    return None, None
+            for source in sources:
+                if source.name == "sample":
+                    continue
+                try:
+                    report = await source.fetch_financials(code)
+                    if report is None:
+                        continue
 
-                report_dict = {
-                    "report_date": report.report_date,
-                    "revenue": report.revenue,
-                    "net_profit": report.net_profit,
-                    "pe_ratio": report.pe_ratio,
-                    "pb_ratio": report.pb_ratio,
-                    "roe": report.roe,
-                    "debt_ratio": report.debt_ratio,
-                    "total_assets": report.total_assets,
-                    "total_equity": report.total_equity,
-                }
-                await queries.upsert_financials(session, code, report_dict)
-                await session.commit()
-                return report_dict, None
-            except Exception as e:
-                logger.error(f"Failed to fetch financials for {code}: {e}")
-                return None, f"Data source temporarily unavailable"
+                    report_dict = {
+                        "report_date": report.report_date,
+                        "revenue": report.revenue,
+                        "net_profit": report.net_profit,
+                        "pe_ratio": report.pe_ratio,
+                        "pb_ratio": report.pb_ratio,
+                        "roe": report.roe,
+                        "debt_ratio": report.debt_ratio,
+                        "total_assets": report.total_assets,
+                        "total_equity": report.total_equity,
+                    }
+                    await queries.upsert_financials(session, code, report_dict)
+                    await session.commit()
+                    return report_dict, None
+                except Exception as e:
+                    logger.error(f"Failed to fetch financials for {code} via {source.name}: {e}")
+
+            return None, "Data source temporarily unavailable"
 
     async def get_index(self, codes: list[str]) -> tuple[list[dict], str | None]:
         results = []
@@ -165,6 +188,8 @@ class DataEngine:
             return [], f"No datasource for market: {market}"
 
         for source in sources:
+            if source.name == "sample":
+                continue
             try:
                 articles = await source.fetch_news(code, limit)
                 if articles:

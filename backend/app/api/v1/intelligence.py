@@ -149,9 +149,13 @@ async def fund_flow(scope: str = Query("stock", pattern=r"^(north|stock)$")):
 
 
 @router.get("/sectors")
-async def sectors():
-    """板块轮动: 同花顺 Financial-API 无行业板块接口，诚实降级。"""
-    return {"sectors": [], "warning": "同花顺暂未提供行业/概念板块排行接口（原 eastmoney push2 不可达）"}
+async def sectors(type: str = Query("industry", pattern=r"^(industry|concept)$")):
+    """板块轮动: 行业/概念板块涨跌幅排行 (eastmoney push2 clist)."""
+    data = await eastmoney.fetch_sector_rank(board=type, limit=30)
+    if not data:
+        return {"sectors": [], "warning": "板块数据暂不可用（东财接口不可达）"}
+    data.sort(key=lambda s: s.get("change_pct") if s.get("change_pct") is not None else -999, reverse=True)
+    return {"sectors": data, "count": len(data)}
 
 
 @router.get("/dragon-tiger")
@@ -184,17 +188,22 @@ async def anomalies(limit: int = Query(50, ge=5, le=200)):
 
 @router.get("/announcements")
 async def announcements(limit: int = Query(20, ge=5, le=100)):
-    """热点流: 用同花顺热股榜(总有数据)。异动事件流见 anomalies。"""
+    """热点公告: 全市场重要公告 (eastmoney np-anotice-stock)."""
+    # Fetch from eastmoney for a few high-profile stocks
+    # Use watchlist stocks or market leaders
     source = _get_source()
-    if source is None:
-        return {"announcements": [], "warning": "无数据源"}
-    data = await source.fetch_hot_stock(level="day")
+    data = []
+    if source:
+        # Use hot stock list to determine which stocks to check announcements for
+        hot = await source.fetch_hot_stock(level="day")
+        for h in hot[:5]:
+            code = h.get("code", "")
+            if code:
+                anns = await eastmoney.fetch_announcements(code, limit=5)
+                for a in anns:
+                    a["stock"] = h.get("name", "")
+                    a["stock_code"] = code
+                    data.append(a)
     if not data:
-        return {"announcements": [], "warning": "热点数据暂不可用"}
-    out = [
-        {"stock": a.get("name", ""), "code": a.get("code", ""),
-         "title": f"热股榜 排名#{int(a.get('rank') or 0)}", "date": "", "tag": "热点",
-         "heat": a.get("heat")}
-        for a in data[:limit]
-    ]
-    return {"announcements": out, "count": len(data)}
+        return {"announcements": [], "warning": "公告数据暂不可用（东财接口不可达）"}
+    return {"announcements": data[:limit], "count": len(data)}
