@@ -1,14 +1,17 @@
 """FastAPI application entry point."""
 import uuid
 import logging
+import signal
+import sys
+import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from app.api.v1.router import router as v1_router
-from app.db.database import init_db
+from app.db.database import init_db, dispose_engine
 from app.engine.data_engine import engine
-from app.engine.scheduler import start_scheduler
+from app.engine.scheduler import start_scheduler, scheduler
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -27,6 +30,19 @@ async def lifespan(app: FastAPI):
     logger.info(f"Startup health: {health}")
     yield
     logger.info("Shutting down...")
+    # Clean shutdown: stop scheduler
+    try:
+        if scheduler.running:
+            scheduler.shutdown(wait=False)
+            logger.info("Scheduler stopped")
+    except Exception as e:
+        logger.warning(f"Scheduler shutdown error: {e}")
+    # Clean shutdown: dispose DB engine (close all pool connections)
+    try:
+        await dispose_engine()
+        logger.info("Database engine disposed")
+    except Exception as e:
+        logger.warning(f"DB engine dispose error: {e}")
 
 
 app = FastAPI(

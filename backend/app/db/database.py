@@ -30,6 +30,30 @@ async def get_db():
         yield session
 
 
+async def dispose_engine():
+    """Dispose the DB engine and close all connections. Called on shutdown."""
+    global _engine, _session_factory
+    if _engine is not None:
+        await _engine.dispose()
+    _engine = None
+    _session_factory = None
+
+
+def get_session_factory():
+    global _session_factory
+    if _session_factory is None:
+        _session_factory = async_sessionmaker(
+            get_engine(), class_=AsyncSession, expire_on_commit=False
+        )
+    return _session_factory
+
+
+async def get_db():
+    factory = get_session_factory()
+    async with factory() as session:
+        yield session
+
+
 async def init_db():
     from app.db.models import Base, StockNews
     engine = get_engine()
