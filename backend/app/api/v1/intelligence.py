@@ -31,9 +31,9 @@ async def overview():
     if source is None:
         return {"indices": [], "breadth": {}, "warning": "无 A 股数据源"}
 
-    # 并行: 指数快照 + 全市场快照(广度) + 涨停池
+    # 并行: 指数快照 + 全市场快照(广度, 拉满5000条) + 涨停池
     idx_task = source.fetch_index_snapshot(list(INDEX_CODES.values()))
-    snap_task = source.fetch_market_snapshot(limit=2000)
+    snap_task = source.fetch_market_snapshot(limit=5000)
     pool_task = source.fetch_limit_up_pool()
     idx_raw, snapshot, pool = await asyncio.gather(idx_task, snap_task, pool_task)
 
@@ -44,21 +44,29 @@ async def overview():
         if match:
             indices.append({"name": name, "code": match["code"], **{k: v for k, v in match.items() if k != "name"}})
 
-    # 涨跌广度
+    # 涨跌广度 - 从全量快照统计
+    # 涨跌停阈值: 主板10%, 创业板(sz.3xx)/科创板(sh.688) 20%
     breadth = {"up": 0, "down": 0, "flat": 0, "limit_up": 0, "limit_down": 0}
     for s in snapshot:
         chg = s.get("change_pct")
         if chg is None:
             continue
+        code = s.get("code", "")
+        # 涨跌停阈值按板块区分
+        if code.startswith("sz.30") or code.startswith("sh.688"):
+            limit_threshold = 19.8  # 创业板/科创板 20%
+        else:
+            limit_threshold = 9.8   # 主板 10%
+        
         if chg > 0.01:
             breadth["up"] += 1
         elif chg < -0.01:
             breadth["down"] += 1
         else:
             breadth["flat"] += 1
-        if chg >= 9.8:
+        if chg >= limit_threshold:
             breadth["limit_up"] += 1
-        elif chg <= -9.8:
+        elif chg <= -limit_threshold:
             breadth["limit_down"] += 1
     if not snapshot:
         warnings.append("行情快照不可用")

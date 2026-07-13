@@ -44,6 +44,11 @@ datasources (pull raw data) → DataEngine (cache-first via SQLite) → indicato
 - **SampleSource 铁律**: `sample` 源仅用于开发兜底，**永远不可缓存到 DB**。`data_engine.py` 检测 `source.name == "sample"` 时跳过 `upsert_daily_klines`，只返回内存数据 + warning。`get_realtime`/`get_financial`/`get_news` 也跳过 sample 源。假数据一旦缓存到 DB，会永久污染后续所有请求（K线、指标、信号、AI解读全部基于假数据）。
 - `eastmoney.py` 提供 `fetch_north_bound`(kamt 北向资金), `fetch_sector_rank`(push2 clist 行业/概念板块排行), `fetch_announcements`(np-anotice-stock 公告)。All methods degrade, never raise.
 - **同花顺 fuyao API 分页陷阱**: `/api/a-share/prices/historical` 接口忽略 `offset` 参数，每次返回相同全量数据。`fetch_kline` 必须用 `date_ms` 去重并在无新数据时 `break`，否则 `while True` 分页循环会无限运行直到 `asyncio.wait_for(timeout=8s)` 超时。
+- **数据精确性铁律**: 所有展示和计算的数据必须基于真实市场数据，不能有任何捏造、不真实或虚假数据。
+  - **fetch-first 策略**: `data_engine.get_klines` 总是先从真实数据源拉取，成功则更新DB缓存，失败才回退到缓存（带warning标记）。**绝不使用 cache-first 策略**，旧缓存会导致K线/指标/signals/AI解读全部基于过时数据。
+  - **涨跌停阈值**: 主板10%（chg>=9.8%），创业板(sz.30x)/科创板(sh.688) 20%（chg>=19.8%）。统计涨停数时必须按板块区分阈值。
+  - **全市场广度**: 统计上涨/下跌家数时必须拉取全量快照（limit=5000），不能只取2000条导致遗漏。
+  - **数据源验证**: 新增数据源或修改数据逻辑后，必须用真实股票代码验证返回值与东方财富/同花顺网页一致。
 
 ### API routes
 All under `/api/v1/` — router tree: `backend/app/api/v1/router.py`. Endpoints: stocks, financial, search, index, health, indicators, skills, watchlist, diagnosis, news, signals, screener, intelligence.
