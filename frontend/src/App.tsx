@@ -143,9 +143,19 @@ function AppShell() {
     const code = state.currentStock?.code
     if (!code) { dispatch({ type: 'SET_SIGNALS', signals: null }); return }
     let cancelled = false
-    getSignals(code).then(s => { if (!cancelled) dispatch({ type: 'SET_SIGNALS', signals: s }) })
-      .catch(() => { if (!cancelled) dispatch({ type: 'SET_SIGNALS', signals: null }) })
-    return () => { cancelled = true }
+    // Set a timeout to show error if signals take too long
+    const timeout = setTimeout(() => {
+      if (!cancelled) dispatch({ type: 'SET_SIGNALS', signals: { active_signals: [], score: { value: 0, pct: 50, label: '中性' }, key_levels: [], risk: null, summary: '信号计算超时，请稍后重试', code, warning: '计算超时' } as any })
+    }, 15000)
+    getSignals(code).then(s => {
+      if (!cancelled) { clearTimeout(timeout); dispatch({ type: 'SET_SIGNALS', signals: s }) }
+    }).catch(() => {
+      if (!cancelled) {
+        clearTimeout(timeout)
+        dispatch({ type: 'SET_SIGNALS', signals: { active_signals: [], score: { value: 0, pct: 50, label: '中性' }, key_levels: [], risk: null, summary: '数据源暂不可用，无法计算信号', code, warning: '数据源暂不可用' } as any })
+      }
+    })
+    return () => { cancelled = true; clearTimeout(timeout) }
   }, [state.currentStock?.code, dispatch])
 
   return (
@@ -155,31 +165,41 @@ function AppShell() {
         <TopTabBar />
         <TopBar />
         <div className="content">
-          {state.activeView === 'stock' && (state.currentStock ? (
-            <>
-              <div className="stock-header">
-                <span className="name">{state.currentStock.name}</span>
-                <span className="code">{state.currentStock.code}</span>
+          <div style={{ display: state.activeView === 'stock' ? 'flex' : 'none', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+            {state.currentStock ? (
+              <>
+                <div className="stock-header">
+                  <span className="name">{state.currentStock.name}</span>
+                  <span className="code">{state.currentStock.code}</span>
+                </div>
+                <InfoCards />
+                <KlineChart />
+                <SignalsPanel />
+                <DiagnosisPanel onManageSkills={() => setSkillOpen(true)} />
+              </>
+            ) : (
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)', fontSize: '1rem', flexDirection: 'column', gap: 8 }}>
+                <span style={{ fontSize: '2rem' }}>🔍</span>
+                搜索股票代码或名称开始分析
+                <span style={{ fontSize: '0.7rem', color: 'var(--muted)' }}>支持 A股（sh.600519 / sz.000001）和美股（us.AAPL）</span>
               </div>
-              <InfoCards />
-              <KlineChart />
-              <SignalsPanel />
-              <DiagnosisPanel onManageSkills={() => setSkillOpen(true)} />
-            </>
-          ) : (
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)', fontSize: '1rem', flexDirection: 'column', gap: 8 }}>
-              <span style={{ fontSize: '2rem' }}>🔍</span>
-              搜索股票代码或名称开始分析
-              <span style={{ fontSize: '0.7rem', color: 'var(--muted)' }}>支持 A股（sh.600519 / sz.000001）和美股（us.AAPL）</span>
-            </div>
-          ))}
-          {state.activeView === 'screener' && <ScreenerView />}
-          {state.activeView === 'intel' && <IntelligenceView />}
-          {state.activeView === 'portfolio' && <PortfolioView />}
+            )}
+          </div>
+          <div style={{ display: state.activeView === 'screener' ? 'block' : 'none', flex: 1, minHeight: 0 }}>
+            <ScreenerView />
+          </div>
+          <div style={{ display: state.activeView === 'intel' ? 'block' : 'none', flex: 1, minHeight: 0 }}>
+            <IntelligenceView />
+          </div>
+          <div style={{ display: state.activeView === 'portfolio' ? 'block' : 'none', flex: 1, minHeight: 0 }}>
+            <PortfolioView />
+          </div>
         </div>
         <StatusBar />
       </div>
-      {state.activeView === 'stock' && state.currentStock && <NewsPanel />}
+      <div style={{ display: state.activeView === 'stock' && state.currentStock ? 'flex' : 'none' }}>
+        <NewsPanel />
+      </div>
       {skillOpen && <SkillManager open={skillOpen} onClose={() => setSkillOpen(false)} onRefresh={load} />}
     </div>
   )

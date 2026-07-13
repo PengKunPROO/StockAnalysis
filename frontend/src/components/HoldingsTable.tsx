@@ -64,6 +64,7 @@ export default function HoldingsTable({ holdings, realtimePrices, onDelete, onSe
                   </td>
                   <td className={`r ${isUp ? 'up' : 'down'}`}>
                     {isUp ? '+' : ''}¥{Math.abs(pnl).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}
+                    <span className="muted small"> ({isUp ? '+' : ''}{pnlPct.toFixed(1)}%)</span>
                   </td>
                   <td className="c">
                     <div className="row-actions">

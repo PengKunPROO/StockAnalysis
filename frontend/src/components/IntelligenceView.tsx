@@ -43,12 +43,12 @@ export default function IntelligenceView() {
         ))}
       </div>
       <div className="intel-content">
-        {tab === 'limit-up' && <LimitUpTab onOpen={openStock} />}
-        {tab === 'fund-flow' && <FundFlowTab />}
-        {tab === 'sectors' && <SectorsTab />}
-        {tab === 'dragon-tiger' && <DragonTigerTab onOpen={openStock} />}
-        {tab === 'anomalies' && <AnomaliesTab onOpen={openStock} />}
-        {tab === 'announcements' && <AnnouncementsTab onOpen={openStock} />}
+        <div style={{ display: tab === 'limit-up' ? 'block' : 'none' }}><LimitUpTab onOpen={openStock} /></div>
+        <div style={{ display: tab === 'fund-flow' ? 'block' : 'none' }}><FundFlowTab /></div>
+        <div style={{ display: tab === 'sectors' ? 'block' : 'none' }}><SectorsTab /></div>
+        <div style={{ display: tab === 'dragon-tiger' ? 'block' : 'none' }}><DragonTigerTab onOpen={openStock} /></div>
+        <div style={{ display: tab === 'anomalies' ? 'block' : 'none' }}><AnomaliesTab onOpen={openStock} /></div>
+        <div style={{ display: tab === 'announcements' ? 'block' : 'none' }}><AnnouncementsTab onOpen={openStock} /></div>
       </div>
     </div>
   )
