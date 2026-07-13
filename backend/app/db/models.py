@@ -102,3 +102,70 @@ class StockNews(Base):
     published_at = Column(String(50))
     fetched_at = Column(Date, nullable=False)
     __table_args__ = (UniqueConstraint('stock_code', 'title', 'fetched_at'),)
+
+
+from sqlalchemy import Boolean
+
+
+class Holding(Base):
+    __tablename__ = "holdings"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    code = Column(String(20), nullable=False)
+    name = Column(String(100), nullable=False)
+    shares = Column(Integer, nullable=False)
+    avg_cost = Column(Numeric(12, 4), nullable=False)
+    buy_date = Column(Date)
+    status = Column(String(10), default="open")
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class Transaction(Base):
+    __tablename__ = "transactions"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    code = Column(String(20), nullable=False)
+    name = Column(String(100), nullable=False)
+    action = Column(String(10), nullable=False)
+    shares = Column(Integer, nullable=False)
+    price = Column(Numeric(12, 4), nullable=False)
+    amount = Column(Numeric(20, 2), nullable=False)
+    traded_at = Column(DateTime, nullable=False)
+    note = Column(Text)
+    created_at = Column(DateTime, server_default=func.now())
+
+
+class DailyReport(Base):
+    __tablename__ = "daily_reports"
+    id = Column(String(36), primary_key=True)
+    report_date = Column(Date, nullable=False, unique=True)
+    status = Column(String(10), default="pending")
+    total_market_value = Column(Numeric(20, 2))
+    total_cost = Column(Numeric(20, 2))
+    total_pnl = Column(Numeric(20, 2))
+    pnl_pct = Column(Numeric(8, 4))
+    summary = Column(Text)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class ReportSection(Base):
+    __tablename__ = "report_sections"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    report_id = Column(String(36), ForeignKey("daily_reports.id"), nullable=False)
+    section_type = Column(String(30), nullable=False)
+    stock_code = Column(String(20))
+    content = Column(Text)
+    section_order = Column(Integer, default=0)
+    status = Column(String(10), default="success")
+
+
+class ReportContext(Base):
+    __tablename__ = "report_contexts"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    report_id = Column(String(36), ForeignKey("daily_reports.id"), nullable=False)
+    stock_code = Column(String(20), nullable=False)
+    advice_type = Column(String(20), nullable=False)
+    key_price = Column(Numeric(12, 4))
+    advice_text = Column(Text)
+    executed = Column(Boolean, default=False)
+    execution_result = Column(String(20))
+    created_at = Column(DateTime, server_default=func.now())

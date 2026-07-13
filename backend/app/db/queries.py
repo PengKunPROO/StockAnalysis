@@ -140,3 +140,218 @@ async def log_sync(session, source: str, data_type: str, code: str | None,
 async def get_all_tracked_codes(session) -> list[str]:
     result = await session.execute(select(Stock.code))
     return [row[0] for row in result.fetchall()]
+
+
+# === Portfolio: Holdings, Transactions, Reports ===
+
+import uuid
+from app.db.models import (
+    Holding, Transaction, DailyReport, ReportSection, ReportContext
+)
+
+
+# --- Holdings ---
+
+async def create_holding(session, code, name, shares, avg_cost, buy_date):
+    holding = Holding(
+        code=code, name=name, shares=shares,
+        avg_cost=avg_cost, buy_date=buy_date, status="open"
+    )
+    session.add(holding)
+    await session.commit()
+    await session.refresh(holding)
+    return holding
+
+
+async def get_holdings(session, only_open=True):
+    stmt = select(Holding)
+    if only_open:
+        stmt = stmt.where(Holding.status == "open")
+    stmt = stmt.order_by(Holding.updated_at.desc())
+    result = await session.execute(stmt)
+    return list(result.scalars().all())
+
+
+async def get_holding_by_code(session, code):
+    result = await session.execute(
+        select(Holding).where(Holding.code == code, Holding.status == "open")
+    )
+    return result.scalar_one_or_none()
+
+
+async def update_holding(session, holding_id, **kwargs):
+    from sqlalchemy import update as sa_update
+    await session.execute(
+        sa_update(Holding).where(Holding.id == holding_id).values(**kwargs)
+    )
+    await session.commit()
+    result = await session.execute(select(Holding).where(Holding.id == holding_id))
+    return result.scalar_one_or_none()
+
+
+async def delete_holding(session, holding_id):
+    from sqlalchemy import delete as sa_delete
+    await session.execute(sa_delete(Holding).where(Holding.id == holding_id))
+    await session.commit()
+
+
+# --- Transactions ---
+
+async def create_transaction(session, code, name, action, shares, price, traded_at, note=None):
+    tx = Transaction(
+        code=code, name=name, action=action,
+        shares=shares, price=price,
+        amount=shares * price, traded_at=traded_at, note=note
+    )
+    session.add(tx)
+    await session.commit()
+    await session.refresh(tx)
+    return tx
+
+
+async def get_transactions(session, code=None, action=None, page=1, limit=20):
+    stmt = select(Transaction)
+    if code:
+        stmt = stmt.where(Transaction.code == code)
+    if action:
+        stmt = stmt.where(Transaction.action == action)
+    stmt = stmt.order_by(Transaction.traded_at.desc())
+    stmt = stmt.offset((page - 1) * limit).limit(limit)
+    result = await session.execute(stmt)
+    return list(result.scalars().all())
+
+
+async def count_transactions(session, code=None, action=None):
+    stmt = select(func.count()).select_from(Transaction)
+    if code:
+        stmt = stmt.where(Transaction.code == code)
+    if action:
+        stmt = stmt.where(Transaction.action == action)
+    result = await session.execute(stmt)
+    return result.scalar()
+
+
+async def get_transaction(session, tx_id):
+    result = await session.execute(
+        select(Transaction).where(Transaction.id == tx_id)
+    )
+    return result.scalar_one_or_none()
+
+
+async def delete_transaction(session, tx_id):
+    from sqlalchemy import delete as sa_delete
+    await session.execute(sa_delete(Transaction).where(Transaction.id == tx_id))
+    await session.commit()
+
+
+# --- Daily Reports ---
+
+async def create_report(session, report_date):
+    report = DailyReport(id=str(uuid.uuid4()), report_date=report_date, status="pending")
+    session.add(report)
+    await session.commit()
+    await session.refresh(report)
+    return report
+
+
+async def get_report_by_date(session, report_date):
+    result = await session.execute(
+        select(DailyReport).where(DailyReport.report_date == report_date)
+    )
+    return result.scalar_one_or_none()
+
+
+async def get_report_by_id(session, report_id):
+    result = await session.execute(
+        select(DailyReport).where(DailyReport.id == report_id)
+    )
+    return result.scalar_one_or_none()
+
+
+async def get_recent_reports(session, limit=30):
+    result = await session.execute(
+        select(DailyReport).order_by(DailyReport.report_date.desc()).limit(limit)
+    )
+    return list(result.scalars().all())
+
+
+async def update_report(session, report_id, **kwargs):
+    from sqlalchemy import update as sa_update
+    await session.execute(
+        sa_update(DailyReport).where(DailyReport.id == report_id).values(**kwargs)
+    )
+    await session.commit()
+
+
+async def save_report_section(session, report_id, section_type, content, section_order=0, stock_code=None, status="success"):
+    section = ReportSection(
+        report_id=report_id, section_type=section_type,
+        stock_code=stock_code, content=content,
+        section_order=section_order, status=status
+    )
+    session.add(section)
+    await session.commit()
+    await session.refresh(section)
+    return section
+
+
+async def get_report_sections(session, report_id):
+    result = await session.execute(
+        select(ReportSection)
+        .where(ReportSection.report_id == report_id)
+        .order_by(ReportSection.section_order.asc())
+    )
+    return list(result.scalars().all())
+
+
+async def delete_report_sections(session, report_id):
+    from sqlalchemy import delete as sa_delete
+    await session.execute(
+        sa_delete(ReportSection).where(ReportSection.report_id == report_id)
+    )
+    await session.commit()
+
+
+# --- Report Contexts (cross-day memory) ---
+
+async def save_report_context(session, report_id, stock_code, advice_type, key_price=None, advice_text=None):
+    ctx = ReportContext(
+        report_id=report_id, stock_code=stock_code,
+        advice_type=advice_type, key_price=key_price,
+        advice_text=advice_text, executed=False
+    )
+    session.add(ctx)
+    await session.commit()
+    await session.refresh(ctx)
+    return ctx
+
+
+async def get_report_contexts(session, report_id):
+    result = await session.execute(
+        select(ReportContext).where(ReportContext.report_id == report_id)
+    )
+    return list(result.scalars().all())
+
+
+async def get_latest_report_contexts(session, stock_code=None):
+    """Get the most recent report's contexts for a stock (or all stocks)."""
+    latest_report = await session.execute(
+        select(DailyReport).order_by(DailyReport.report_date.desc()).limit(1)
+    )
+    report = latest_report.scalar_one_or_none()
+    if not report:
+        return []
+    stmt = select(ReportContext).where(ReportContext.report_id == report.id)
+    if stock_code:
+        stmt = stmt.where(ReportContext.stock_code == stock_code)
+    result = await session.execute(stmt)
+    return list(result.scalars().all())
+
+
+async def update_report_context(session, ctx_id, executed, execution_result=None):
+    from sqlalchemy import update as sa_update
+    await session.execute(
+        sa_update(ReportContext).where(ReportContext.id == ctx_id)
+        .values(executed=executed, execution_result=execution_result)
+    )
+    await session.commit()

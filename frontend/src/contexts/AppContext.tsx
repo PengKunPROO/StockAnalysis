@@ -3,7 +3,7 @@ import type { StockInfo, SkillMeta, DiagnosisSession, WatchlistItem, SignalsPayl
 
 const STORAGE_KEY = 'stockagent_state'
 
-export type AppView = 'stock' | 'screener' | 'intel'
+export type AppView = 'stock' | 'screener' | 'intel' | 'portfolio'
 
 interface AppState {
   currentStock: StockInfo | null

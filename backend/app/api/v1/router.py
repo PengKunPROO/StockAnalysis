@@ -4,6 +4,7 @@ from . import indicators, skills_api, watchlist, diagnosis, news
 from . import signals
 from . import screener
 from . import intelligence
+from . import portfolio
 
 router = APIRouter(prefix="/api/v1")
 router.include_router(stocks.router)
@@ -19,3 +20,4 @@ router.include_router(news.router)
 router.include_router(signals.router)
 router.include_router(screener.router)
 router.include_router(intelligence.router)
+router.include_router(portfolio.router)
