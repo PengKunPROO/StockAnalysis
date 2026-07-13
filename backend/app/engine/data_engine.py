@@ -1,4 +1,4 @@
-"""Data Engine: cache-first fetch orchestration."""
+"""Data Engine: fetch-first with cache fallback."""
 import asyncio
 import logging
 from datetime import date, timedelta
@@ -10,26 +10,17 @@ logger = logging.getLogger(__name__)
 
 
 class DataEngine:
-    """Orchestrates data fetching with SQLite caching."""
+    """Orchestrates data fetching: try real source first, fall back to DB cache."""
 
     async def get_klines(
         self, code: str, period: str, start: str, end: str,
     ) -> tuple[list[dict], str | None]:
         factory = get_session_factory()
         async with factory() as session:
+            # Read cache for fallback
             cached = await queries.get_daily_klines(session, code, start, end)
-            if cached and len(cached) > 0:
-                # 缓存优先: 覆盖到近期(end-7天)即直接返回,避免慢网络拉取。
-                # fuyao historical kline 间歇超时,优先用缓存兜底(bug1: K线消失)。
-                last_cached = cached[-1]["date"]
-                try:
-                    end_d = date.fromisoformat(end)
-                    last_d = date.fromisoformat(last_cached)
-                    if last_d >= end_d - timedelta(days=7):
-                        return cached, None
-                except (ValueError, TypeError):
-                    return cached, None
 
+            # Fetch-first: always try to get fresh data from real sources
             market = self._market_from_code(code)
             sources = get_all_sources_for_market(market)
             if not sources:
@@ -38,9 +29,11 @@ class DataEngine:
             bars = []
             source_name = None
             for source in sources:
+                if source.name == "sample":
+                    continue
                 try:
                     bars = await asyncio.wait_for(
-                        source.fetch_kline(code, period, start, end), timeout=8
+                        source.fetch_kline(code, period, start, end), timeout=12
                     )
                     if bars:
                         source_name = source.name
@@ -49,9 +42,26 @@ class DataEngine:
                     logger.warning(f"Kline fetch failed via {source.name} for {code}: {e}")
 
             if not bars:
-                return cached or [], "Data source temporarily unavailable"
+                # All real sources failed -> return cache if available
+                if cached:
+                    logger.info(f"Using cached klines for {code} (source unavailable)")
+                    return cached, "使用缓存数据（数据源暂不可用）"
+                # Last resort: try sample source (fake data, never cached)
+                for source in sources:
+                    if source.name == "sample":
+                        try:
+                            bars = await asyncio.wait_for(
+                                source.fetch_kline(code, period, start, end), timeout=8
+                            )
+                            if bars:
+                                source_name = "sample"
+                                break
+                        except Exception:
+                            pass
+                if not bars:
+                    return [], "Data source temporarily unavailable"
 
-            # Never cache sample/fake data to DB - only persist real source data
+            # Never cache sample/fake data to DB
             if source_name == "sample":
                 logger.info(f"Returning sample data for {code} (not cached to DB)")
                 return [
@@ -63,6 +73,7 @@ class DataEngine:
                     for b in bars
                 ], "使用模拟数据（真实数据源暂不可用）"
 
+            # Persist real data to cache
             bar_dicts = [
                 {
                     "trade_date": date.fromisoformat(b.date),
