@@ -142,8 +142,9 @@ function AppShell() {
   useEffect(() => {
     const code = state.currentStock?.code
     if (!code) { dispatch({ type: 'SET_SIGNALS', signals: null }); return }
+    // Clear previous signals immediately to show loading state
+    dispatch({ type: 'SET_SIGNALS', signals: null })
     let cancelled = false
-    // Set a timeout to show error if signals take too long
     const timeout = setTimeout(() => {
       if (!cancelled) dispatch({ type: 'SET_SIGNALS', signals: { active_signals: [], score: { value: 0, pct: 50, label: '中性' }, key_levels: [], risk: null, summary: '信号计算超时，请稍后重试', code, warning: '计算超时' } as any })
     }, 15000)
@@ -156,7 +157,7 @@ function AppShell() {
       }
     })
     return () => { cancelled = true; clearTimeout(timeout) }
-  }, [state.currentStock?.code, dispatch])
+  }, [state.currentStock, dispatch])
 
   return (
     <div className="app">

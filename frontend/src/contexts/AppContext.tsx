@@ -53,7 +53,7 @@ type Action =
 
 function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
-    case 'SET_STOCK': return { ...state, currentStock: action.stock, signals: null }
+    case 'SET_STOCK': return { ...state, currentStock: action.stock }
     case 'SET_SKILLS': return { ...state, skills: action.skills }
     case 'SET_SESSIONS': return { ...state, sessions: action.sessions }
     case 'SET_WATCHLIST': return { ...state, watchlist: action.watchlist }
