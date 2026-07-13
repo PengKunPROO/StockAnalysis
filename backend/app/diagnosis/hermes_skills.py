@@ -5,6 +5,15 @@ from pathlib import Path
 
 HERMES_SKILLS_DIR = Path(os.path.expandvars(r"%LOCALAPPDATA%\hermes\skills"))
 
+FINANCE_KEYWORDS = ['股票', '金融', '投资', 'A股', '财报', '估值', 'ESG', '红利', '分红',
+    '市场', '交易', '技术分析', '基本面', '量化', '基金', '证券', '股息', '因子',
+    'stock', 'finance', 'invest', 'market', 'trade', 'portfolio']
+
+
+def _is_finance_skill(name: str, description: str) -> bool:
+    text = (name + " " + description).lower()
+    return any(kw.lower() in text for kw in FINANCE_KEYWORDS)
+
 
 def _parse_frontmatter(content: str) -> dict:
     match = re.match(r'^---\s*\r?\n(.*?)\r?\n---\s*\r?\n', content, re.DOTALL)
@@ -28,7 +37,7 @@ def _find_skill_dirs(root: Path) -> list[Path]:
 
 
 def list_hermes_skills() -> list[dict]:
-    """List all installed hermes skills with metadata."""
+    """List all installed hermes skills with metadata (filtered to finance-relevant only)."""
     skills = []
     for skill_dir in _find_skill_dirs(HERMES_SKILLS_DIR):
         md_path = skill_dir / "SKILL.md"
@@ -38,13 +47,15 @@ def list_hermes_skills() -> list[dict]:
             continue
         meta = _parse_frontmatter(content)
         name = meta.get("name", skill_dir.name)
-        # Determine source: builtin -> "hermes-builtin", local -> "hermes"
+        desc = meta.get("description", "")
+        if not _is_finance_skill(name, desc):
+            continue
         source = "hermes"
         if (skill_dir / ".builtin").exists() or skill_dir.name in ("claude-code", "codex", "hermes-agent", "opencode"):
             source = "hermes-builtin"
         skills.append({
             "name": name,
-            "description": meta.get("description", ""),
+            "description": desc,
             "mode": meta.get("mode", "general"),
             "source": source,
             "path": str(skill_dir.relative_to(HERMES_SKILLS_DIR)),
