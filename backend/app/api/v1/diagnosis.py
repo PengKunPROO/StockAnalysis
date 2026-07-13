@@ -143,6 +143,7 @@ async def chat(req: ChatRequest):
 
         full_output = ""
         in_analysis = False
+        line_count = 0
         returncode = 0
         stderr_text = ""
 
@@ -156,11 +157,20 @@ async def chat(req: ChatRequest):
                 return
 
             line = item if isinstance(item, str) else str(item)
+            line_count += 1
+
             if not in_analysis:
                 clean = ANSI_RE.sub('', line)
                 if ANALYSIS_START.search(clean):
                     in_analysis = True
-                continue
+                    continue
+                # Fallback: if no analysis marker found after 30 lines,
+                # start treating all non-skip lines as content
+                if line_count > 30:
+                    in_analysis = True
+                    # Fall through to process this line as content
+                else:
+                    continue
 
             clean = ANSI_RE.sub('', line)
             if ANALYSIS_END.search(clean):
@@ -168,10 +178,11 @@ async def chat(req: ChatRequest):
 
             filtered = _filter_line(line)
             if filtered is not None:
-                full_output += filtered
+                full_output += filtered + "\n"
                 if "$" in filtered and "curl" in filtered:
-                    yield f'data: {json.dumps({"status": "fetching_data"}, ensure_ascii=False)}\n\n'
-                yield f"data: {json.dumps({'content': filtered}, ensure_ascii=False)}\n\n"
+                    yield f'data: {json.dumps({{"status": "fetching_data"}}, ensure_ascii=False)}\n\n'
+                chunk = filtered + "\n"
+                yield f"data: {json.dumps({'content': chunk}, ensure_ascii=False)}\n\n"
 
         # Read final signals
         try:
