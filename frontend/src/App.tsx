@@ -13,6 +13,7 @@ import TopTabBar from './components/TopTabBar'
 import SignalsPanel from './components/SignalsPanel'
 import ScreenerView from './components/ScreenerView'
 import IntelligenceView from './components/IntelligenceView'
+import PortfolioView from './components/PortfolioView'
 
 function Sidebar() {
   const { state, dispatch } = useApp()
@@ -174,6 +175,7 @@ function AppShell() {
           ))}
           {state.activeView === 'screener' && <ScreenerView />}
           {state.activeView === 'intel' && <IntelligenceView />}
+          {state.activeView === 'portfolio' && <PortfolioView />}
         </div>
         <StatusBar />
       </div>

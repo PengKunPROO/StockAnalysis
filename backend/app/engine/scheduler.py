@@ -52,6 +52,17 @@ async def sync_all_daily_klines():
             logger.error(f"Sync failed for {code}: {e}")
 
 
+async def _generate_daily_report():
+    """Generate daily portfolio report at 08:30."""
+    from datetime import date as _date
+    from app.portfolio.report import generate_report as _gen
+    try:
+        await _gen(_date.today())
+        logger.info("Daily report generated successfully")
+    except Exception as e:
+        logger.error(f"Daily report generation failed: {e}")
+
+
 def start_scheduler():
     scheduler.add_job(
         sync_all_daily_klines,
@@ -63,6 +74,12 @@ def start_scheduler():
         cleanup_old_data,
         "cron", hour=3, minute=0,
         id="data_cleanup",
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        _generate_daily_report,
+        "cron", hour=8, minute=30,
+        id="daily_report_generate",
         replace_existing=True,
     )
     scheduler.start()

@@ -4,6 +4,7 @@ const TABS: { key: AppView; label: string; icon: string }[] = [
   { key: 'stock', label: '个股分析', icon: '📈' },
   { key: 'screener', label: '选股器', icon: '🔍' },
   { key: 'intel', label: '市场情报', icon: '🌐' },
+  { key: 'portfolio', label: '持仓管理', icon: '📊' },
 ]
 
 export default function TopTabBar() {
