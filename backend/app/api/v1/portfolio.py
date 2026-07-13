@@ -165,3 +165,117 @@ async def delete_transaction(tx_id: int):
     async with factory() as session:
         await queries.delete_transaction(session, tx_id)
         return {"deleted": tx_id}
+
+
+# === Reports ===
+
+from app.portfolio.report import generate_report as run_report_generation
+
+
+@router.get("/reports")
+async def get_reports(limit: int = Query(default=30, ge=1, le=365)):
+    factory = get_session_factory()
+    async with factory() as session:
+        reports = await queries.get_recent_reports(session, limit)
+        return {"reports": [
+            {
+                "id": r.id, "report_date": str(r.report_date),
+                "status": r.status,
+                "total_market_value": float(r.total_market_value) if r.total_market_value else None,
+                "total_pnl": float(r.total_pnl) if r.total_pnl else None,
+                "pnl_pct": float(r.pnl_pct) if r.pnl_pct else None,
+                "summary": (r.summary or "")[:200],
+            }
+            for r in reports
+        ]}
+
+
+@router.get("/reports/today")
+async def get_today_report():
+    today = date.today()
+    factory = get_session_factory()
+    async with factory() as session:
+        report = await queries.get_report_by_date(session, today)
+        if not report:
+            raise HTTPException(status_code=404, detail="Today's report not generated yet")
+        sections = await queries.get_report_sections(session, report.id)
+        return {
+            "id": report.id, "report_date": str(report.report_date),
+            "status": report.status,
+            "total_market_value": float(report.total_market_value) if report.total_market_value else None,
+            "total_pnl": float(report.total_pnl) if report.total_pnl else None,
+            "pnl_pct": float(report.pnl_pct) if report.pnl_pct else None,
+            "summary": report.summary,
+            "sections": [
+                {
+                    "section_type": s.section_type, "stock_code": s.stock_code,
+                    "content": s.content, "status": s.status,
+                }
+                for s in sections
+            ],
+        }
+
+
+@router.get("/reports/{report_date}")
+async def get_report_by_date(report_date: date):
+    factory = get_session_factory()
+    async with factory() as session:
+        report = await queries.get_report_by_date(session, report_date)
+        if not report:
+            raise HTTPException(status_code=404, detail="Report not found")
+        sections = await queries.get_report_sections(session, report.id)
+        contexts = await queries.get_report_contexts(session, report.id)
+        return {
+            "id": report.id, "report_date": str(report.report_date),
+            "status": report.status,
+            "total_market_value": float(report.total_market_value) if report.total_market_value else None,
+            "total_cost": float(report.total_cost) if report.total_cost else None,
+            "total_pnl": float(report.total_pnl) if report.total_pnl else None,
+            "pnl_pct": float(report.pnl_pct) if report.pnl_pct else None,
+            "summary": report.summary,
+            "sections": [
+                {
+                    "section_type": s.section_type, "stock_code": s.stock_code,
+                    "content": s.content, "status": s.status,
+                }
+                for s in sections
+            ],
+            "contexts": [
+                {
+                    "id": c.id, "stock_code": c.stock_code,
+                    "advice_type": c.advice_type, "advice_text": c.advice_text,
+                    "key_price": float(c.key_price) if c.key_price else None,
+                    "executed": c.executed, "execution_result": c.execution_result,
+                }
+                for c in contexts
+            ],
+        }
+
+
+@router.post("/reports/generate")
+async def generate_report_api():
+    import asyncio
+    today = date.today()
+    # Run in background
+    asyncio.create_task(run_report_generation(today))
+    factory = get_session_factory()
+    async with factory() as session:
+        report = await queries.get_report_by_date(session, today)
+        if report:
+            return {"report_id": report.id, "status": "generating"}
+        return {"status": "generating"}
+
+
+# === Report Contexts ===
+
+class ContextUpdate(BaseModel):
+    executed: bool
+    execution_result: str | None = None
+
+
+@router.patch("/reports/context/{ctx_id}")
+async def update_context(ctx_id: int, item: ContextUpdate):
+    factory = get_session_factory()
+    async with factory() as session:
+        await queries.update_report_context(session, ctx_id, item.executed, item.execution_result)
+        return {"updated": ctx_id}

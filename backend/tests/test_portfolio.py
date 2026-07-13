@@ -1,7 +1,9 @@
 import pytest
 import pytest_asyncio
 import asyncio
+import json
 from datetime import date, datetime
+from unittest.mock import AsyncMock, patch, MagicMock
 from sqlalchemy import delete as sa_delete
 from app.db.database import get_session_factory
 from app.db.models import Holding, Transaction, DailyReport, ReportSection, ReportContext
@@ -15,6 +17,9 @@ def _clean_portfolio_tables():
     async def _clean():
         factory = get_session_factory()
         async with factory() as session:
+            await session.execute(sa_delete(ReportContext))
+            await session.execute(sa_delete(ReportSection))
+            await session.execute(sa_delete(DailyReport))
             await session.execute(sa_delete(Holding))
             await session.execute(sa_delete(Transaction))
             await session.commit()
@@ -361,3 +366,159 @@ class TestCalculator:
         assert result["total_market_value"] == 0
         assert result["total_pnl"] == 0
         assert result["holdings_count"] == 0
+
+
+class TestReportGeneration:
+    @pytest.mark.asyncio
+    async def test_generate_report_no_holdings(self, db_session):
+        from app.portfolio.report import generate_report
+        with patch("app.portfolio.report.data_engine.get_realtime", new_callable=AsyncMock) as mock_rt:
+            mock_rt.return_value = (None, "no data")
+            report = await generate_report(date(2026, 7, 12))
+        assert report is not None
+        assert report["status"] == "completed"
+        # Should have portfolio_analysis section but no stock_analysis
+        assert "portfolio_analysis" in report["sections"]
+        assert len(report["sections"].get("stock_analysis", [])) == 0
+
+    @pytest.mark.asyncio
+    async def test_generate_report_with_holdings(self, db_session):
+        from app.portfolio.report import generate_report
+        # Create a holding
+        await queries.create_holding(db_session, "sh.600519", "贵州茅台", 100, 1680.0, date(2026, 5, 10))
+
+        # Mock DeepSeek API response
+        mock_response = {
+            "choices": [{
+                "message": {
+                    "content": "## 贵州茅台分析\n\n技术面：MACD健康。建议持有。",
+                    "tool_calls": None
+                }
+            }]
+        }
+
+        with patch("app.portfolio.analyzer.httpx.AsyncClient") as mock_client, \
+             patch("app.portfolio.report.data_engine.get_realtime", new_callable=AsyncMock) as mock_rt:
+            mock_rt.return_value = ({"price": 1700.0, "change_pct": 1.2}, None)
+            mock_response_obj = MagicMock(status_code=200, json=MagicMock(return_value=mock_response))
+            mock_client_instance = AsyncMock()
+            mock_client_instance.post = AsyncMock(return_value=mock_response_obj)
+            mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client_instance)
+            mock_client.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            report = await generate_report(date(2026, 7, 12))
+
+        assert report["status"] == "completed"
+        assert "portfolio_analysis" in report["sections"]
+        assert len(report["sections"]["stock_analysis"]) >= 1
+        assert report["sections"]["stock_analysis"][0]["stock_code"] == "sh.600519"
+
+    @pytest.mark.asyncio
+    async def test_generate_report_stock_analysis_failure(self, db_session):
+        from app.portfolio.report import generate_report
+        await queries.create_holding(db_session, "sh.600519", "贵州茅台", 100, 1680.0, date(2026, 5, 10))
+        await queries.create_holding(db_session, "sz.000001", "平安银行", 200, 12.5, date(2026, 6, 1))
+
+        # Mock DeepSeek to fail for one stock
+        call_count = [0]
+        async def mock_post_side_effect(*args, **kwargs):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                raise Exception("API timeout")
+            return MagicMock(status_code=200, json=MagicMock(return_value={
+                "choices": [{"message": {"content": "分析内容", "tool_calls": None}}]
+            }))
+
+        with patch("app.portfolio.analyzer.httpx.AsyncClient") as mock_client, \
+             patch("app.portfolio.report.data_engine.get_realtime", new_callable=AsyncMock) as mock_rt:
+            mock_rt.return_value = ({"price": 1700.0, "change_pct": 1.2}, None)
+            mock_client_instance = AsyncMock()
+            mock_client_instance.post = AsyncMock(side_effect=mock_post_side_effect)
+            mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client_instance)
+            mock_client.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            report = await generate_report(date(2026, 7, 12))
+
+        # One stock should fail but report still completes
+        assert report["status"] == "completed"
+        stock_analyses = report["sections"]["stock_analysis"]
+        statuses = [s["status"] for s in stock_analyses]
+        assert "failed" in statuses or "success" in statuses
+
+    @pytest.mark.asyncio
+    async def test_report_context_saved(self, db_session):
+        from app.portfolio.report import generate_report
+        await queries.create_holding(db_session, "sh.600519", "贵州茅台", 100, 1680.0, date(2026, 5, 10))
+
+        mock_response = {
+            "choices": [{
+                "message": {
+                    "content": json.dumps({
+                        "advice": "hold", "buy_range": "1750-1820",
+                        "stop_loss": 1680, "target": 1950,
+                        "analysis": "建议持有"
+                    }),
+                    "tool_calls": None
+                }
+            }]
+        }
+
+        with patch("app.portfolio.analyzer.httpx.AsyncClient") as mock_client, \
+             patch("app.portfolio.report.data_engine.get_realtime", new_callable=AsyncMock) as mock_rt:
+            mock_rt.return_value = ({"price": 1700.0, "change_pct": 1.2}, None)
+            mock_response_obj = MagicMock(status_code=200, json=MagicMock(return_value=mock_response))
+            mock_client_instance = AsyncMock()
+            mock_client_instance.post = AsyncMock(return_value=mock_response_obj)
+            mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client_instance)
+            mock_client.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            report = await generate_report(date(2026, 7, 12))
+
+        # Verify context was saved
+        factory = get_session_factory()
+        async with factory() as session:
+            contexts = await queries.get_report_contexts(session, report["report_id"])
+            assert len(contexts) >= 1
+            assert contexts[0].stock_code == "sh.600519"
+
+
+class TestReportAPI:
+    def test_get_today_report_not_found(self, client):
+        resp = client.get("/api/v1/portfolio/reports/today")
+        assert resp.status_code == 404
+
+    def test_get_report_list(self, client):
+        # Generate a report first via internal call
+        import asyncio
+        from app.portfolio.report import generate_report
+        loop = asyncio.new_event_loop()
+        with patch("app.portfolio.report.data_engine.get_realtime", new_callable=AsyncMock) as mock_rt:
+            mock_rt.return_value = (None, "no data")
+            loop.run_until_complete(generate_report(date(2026, 7, 12)))
+        loop.close()
+
+        resp = client.get("/api/v1/portfolio/reports")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["reports"]) >= 1
+
+    def test_get_report_by_date(self, client):
+        import asyncio
+        from app.portfolio.report import generate_report
+        loop = asyncio.new_event_loop()
+        with patch("app.portfolio.report.data_engine.get_realtime", new_callable=AsyncMock) as mock_rt:
+            mock_rt.return_value = (None, "no data")
+            loop.run_until_complete(generate_report(date(2026, 7, 12)))
+        loop.close()
+
+        resp = client.get("/api/v1/portfolio/reports/2026-07-12")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["report_date"] == "2026-07-12"
+        assert "sections" in data
+
+    def test_generate_report_api(self, client):
+        resp = client.post("/api/v1/portfolio/reports/generate")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "report_id" in data or "status" in data
