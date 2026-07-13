@@ -92,3 +92,98 @@ class TestFields:
 
     def test_news_fields_set(self):
         assert NEWS_FIELDS == {"on_dragon_tiger", "hot_rank", "main_net_flow"}
+
+
+# === Task 2: Engine tests ===
+
+from app.screener.engine import list_skills, run_screener, SKILLS
+from unittest.mock import AsyncMock, patch, MagicMock
+
+
+class TestSkills:
+    def test_six_skills(self):
+        skills = list_skills()
+        assert len(skills) == 6
+
+    def test_skill_names(self):
+        skills = list_skills()
+        names = [s["name"] for s in skills]
+        assert "oversold_bounce" in names
+        assert "cigarette_butt" in names
+        assert "value" in names
+        assert "technical" in names
+        assert "news_driven" in names
+        assert "breakout" in names
+
+    def test_skill_has_fields(self):
+        for s in list_skills():
+            assert "name" in s
+            assert "label" in s
+            assert "description" in s
+            assert "fields" in s
+
+
+class TestRunScreener:
+    @pytest.mark.asyncio
+    async def test_run_no_source(self):
+        with patch("app.screener.engine.get_source_for_market", return_value=None):
+            result = await run_screener({})
+            assert result["results"] == []
+            assert "warning" in result
+
+    @pytest.mark.asyncio
+    async def test_run_pass1_only(self):
+        mock_source = MagicMock()
+        mock_source.name = "tonghuashun"
+        mock_source.fetch_market_snapshot = AsyncMock(return_value=[
+            {"code": "sh.600519", "name": "贵州茅台", "change_pct": 5.5, "amount": 10000000, "amplitude": 3.2},
+            {"code": "sz.000001", "name": "平安银行", "change_pct": -1.0, "amount": 5000000, "amplitude": 2.0},
+        ])
+        mock_source.fetch_ticker_list = AsyncMock(return_value=[])
+
+        with patch("app.screener.engine.get_source_for_market", return_value=mock_source):
+            # Clear cache
+            import app.screener.engine as eng
+            eng._SNAP_CACHE["snap"] = None
+            result = await run_screener({"change_pct": {"min": 3}})
+            assert result["count"] == 1
+            assert result["results"][0]["code"] == "sh.600519"
+            assert "factor_details" in result["results"][0]
+
+    @pytest.mark.asyncio
+    async def test_run_pass2_limit_50(self):
+        mock_stocks = [
+            {"code": f"sh.60000{i}", "name": f"股票{i}", "change_pct": 5.0, "amount": 10000000}
+            for i in range(60)
+        ]
+        mock_source = MagicMock()
+        mock_source.name = "tonghuashun"
+        mock_source.fetch_market_snapshot = AsyncMock(return_value=mock_stocks)
+        mock_source.fetch_ticker_list = AsyncMock(return_value=[])
+
+        with patch("app.screener.engine.get_source_for_market", return_value=mock_source):
+            import app.screener.engine as eng
+            eng._SNAP_CACHE["snap"] = None
+            with patch("app.screener.engine._apply_pass2", AsyncMock(return_value=mock_stocks[:50])):
+                result = await run_screener({"roe": {"min": 10}})
+                assert result["count"] <= 50
+
+    @pytest.mark.asyncio
+    async def test_factor_details_snapshot(self):
+        """Pass1 results should have factor_details for snapshot fields."""
+        mock_source = MagicMock()
+        mock_source.name = "tonghuashun"
+        mock_source.fetch_market_snapshot = AsyncMock(return_value=[
+            {"code": "sh.600519", "name": "茅台", "change_pct": 5.5, "amount": 10000000, "amplitude": 3.2},
+        ])
+        mock_source.fetch_ticker_list = AsyncMock(return_value=[])
+
+        with patch("app.screener.engine.get_source_for_market", return_value=mock_source):
+            import app.screener.engine as eng
+            eng._SNAP_CACHE["snap"] = None
+            result = await run_screener({"change_pct": {"min": 3}, "amount": {"min": 5000000}})
+            stock = result["results"][0]
+            assert "factor_details" in stock
+            assert "change_pct" in stock["factor_details"]
+            assert stock["factor_details"]["change_pct"]["pass"] == True
+            assert stock["factor_details"]["change_pct"]["actual"] == 5.5

@@ -30,7 +30,8 @@ class RunRequest(BaseModel):
 @router.post("/run")
 async def run(req: RunRequest):
     sort = req.sort if req.sort in (
-        "change_pct", "roe", "pe_ttm", "pb", "turnover", "amount", "total_market_cap"
+        "change_pct", "roe", "debt_ratio", "amplitude", "amount",
+        "near_high_drop", "change_5d", "change_20d", "hot_rank", "main_net_flow"
     ) else "change_pct"
     limit = max(1, min(req.limit, 200))
     result = await run_screener(req.fields, sort=sort, limit=limit)
