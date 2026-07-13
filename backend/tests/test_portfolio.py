@@ -6,6 +6,7 @@ from sqlalchemy import delete as sa_delete
 from app.db.database import get_session_factory
 from app.db.models import Holding, Transaction, DailyReport, ReportSection, ReportContext
 from app.db import queries
+from app.portfolio.calculator import calculate_portfolio_metrics
 
 
 @pytest.fixture(autouse=True)
@@ -282,3 +283,81 @@ class TestTransactionAPI:
         tx_id = create.json()["id"]
         resp = client.delete(f"/api/v1/portfolio/transactions/{tx_id}")
         assert resp.status_code == 200
+
+
+class TestCalculator:
+    def test_portfolio_metrics_basic(self):
+        holdings = [
+            {"code": "sh.600519", "name": "贵州茅台", "shares": 100, "avg_cost": 1680.0, "industry": "白酒"},
+            {"code": "sz.300750", "name": "宁德时代", "shares": 200, "avg_cost": 182.5, "industry": "新能源"},
+        ]
+        transactions = [
+            {"code": "sh.600519", "action": "buy", "shares": 100, "price": 1680.0, "traded_at": "2026-05-01T09:30:00"},
+            {"code": "sh.600519", "action": "sell", "shares": 50, "price": 1850.0, "traded_at": "2026-06-01T14:00:00"},
+        ]
+        realtime = {
+            "sh.600519": {"price": 1842.5, "change_pct": 1.2},
+            "sz.300750": {"price": 198.3, "change_pct": -0.5},
+        }
+        result = calculate_portfolio_metrics(holdings, transactions, realtime)
+        assert result["total_market_value"] == 100 * 1842.5 + 200 * 198.3
+        assert result["total_cost"] == 100 * 1680.0 + 200 * 182.5
+        assert result["total_pnl"] > 0
+        assert result["holdings_count"] == 2
+        # Position weights
+        assert len(result["position_weights"]) == 2
+        assert result["position_weights"][0]["code"] == "sh.600519"
+        assert result["position_weights"][0]["weight"] > 0.5
+
+    def test_win_rate(self):
+        holdings = [{"code": "sh.600519", "name": "茅台", "shares": 100, "avg_cost": 1680.0, "industry": "白酒"}]
+        transactions = [
+            {"code": "sh.600519", "action": "buy", "shares": 100, "price": 1680.0, "traded_at": "2026-01-01T09:30:00"},
+            {"code": "sh.600519", "action": "sell", "shares": 100, "price": 1800.0, "traded_at": "2026-03-01T14:00:00"},
+            {"code": "sh.600519", "action": "buy", "shares": 100, "price": 1700.0, "traded_at": "2026-04-01T09:30:00"},
+            {"code": "sh.600519", "action": "sell", "shares": 100, "price": 1650.0, "traded_at": "2026-05-01T14:00:00"},
+        ]
+        realtime = {"sh.600519": {"price": 1700.0, "change_pct": 0.0}}
+        result = calculate_portfolio_metrics(holdings, transactions, realtime)
+        # 2 closed trades: 1 win (1680->1800), 1 loss (1700->1650)
+        assert result["operation_stats"]["win_rate"] == 0.5
+        assert result["operation_stats"]["total_closed_trades"] == 2
+
+    def test_concentration_hhi(self):
+        holdings = [
+            {"code": "sh.600519", "name": "茅台", "shares": 100, "avg_cost": 1680.0, "industry": "白酒"},
+            {"code": "sz.000001", "name": "平安", "shares": 100, "avg_cost": 12.5, "industry": "银行"},
+        ]
+        transactions = []
+        realtime = {
+            "sh.600519": {"price": 1842.5, "change_pct": 1.0},
+            "sz.000001": {"price": 12.5, "change_pct": 0.0},
+        }
+        result = calculate_portfolio_metrics(holdings, transactions, realtime)
+        # 茅台 184250, 平安 1250 -> weight ~99.3%, ~0.7%
+        assert result["concentration"]["max_weight"] > 0.99
+        assert result["concentration"]["hhi"] > 8000  # highly concentrated
+
+    def test_industry_exposure(self):
+        holdings = [
+            {"code": "sh.600519", "name": "茅台", "shares": 10, "avg_cost": 1680.0, "industry": "白酒"},
+            {"code": "sz.300750", "name": "宁德", "shares": 200, "avg_cost": 182.5, "industry": "新能源"},
+            {"code": "sz.002594", "name": "比亚迪", "shares": 80, "avg_cost": 245.0, "industry": "新能源"},
+        ]
+        transactions = []
+        realtime = {
+            "sh.600519": {"price": 1842.5, "change_pct": 1.0},
+            "sz.300750": {"price": 198.3, "change_pct": -0.5},
+            "sz.002594": {"price": 268.4, "change_pct": 0.8},
+        }
+        result = calculate_portfolio_metrics(holdings, transactions, realtime)
+        industries = result["industry_exposure"]
+        assert "白酒" in industries
+        assert "新能源" in industries
+        assert industries["新能源"] > industries["白酒"]
+
+    def test_empty_holdings(self):
+        result = calculate_portfolio_metrics([], [], {})
+        assert result["total_market_value"] == 0
+        assert result["total_pnl"] == 0
+        assert result["holdings_count"] == 0
