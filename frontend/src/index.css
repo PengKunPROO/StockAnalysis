@@ -153,6 +153,27 @@ a:hover { text-decoration: underline; }
 .msg.ai th { background: var(--surface2); color: var(--heading); padding: 5px 8px; border: 1px solid var(--border); text-align: left; font-size: 0.7rem; font-weight: 600; }
 .msg.ai td { padding: 4px 8px; border: 1px solid var(--border); }
 
+/* Markdown rendered content (react-markdown) */
+.msg-body .md-table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 0.75rem; overflow-x: auto; display: block; }
+.msg-body .md-table th { background: var(--surface2); color: var(--heading); padding: 5px 8px; border: 1px solid var(--border); text-align: left; font-size: 0.7rem; font-weight: 600; white-space: nowrap; }
+.msg-body .md-table td { padding: 4px 8px; border: 1px solid var(--border); white-space: pre-wrap; word-break: break-all; }
+.msg-body .md-table tr:nth-child(even) { background: rgba(255,255,255,0.02); }
+.msg-body .md-p { margin: 4px 0; line-height: 1.65; }
+.msg-body .md-strong { color: var(--heading); font-weight: 600; }
+.msg-body .md-h1 { font-size: 1rem; color: var(--heading); margin: 10px 0 6px; border-bottom: 1px solid var(--border-light); padding-bottom: 4px; }
+.msg-body .md-h2 { font-size: 0.9rem; color: var(--heading); margin: 8px 0 4px; }
+.msg-body .md-h3 { font-size: 0.82rem; color: var(--heading); margin: 6px 0 3px; }
+.msg-body .md-h4 { font-size: 0.78rem; color: var(--heading); margin: 4px 0 2px; }
+.msg-body .md-ul, .msg-body .md-ol { padding-left: 20px; margin: 4px 0; }
+.msg-body .md-li { margin: 2px 0; line-height: 1.6; }
+.msg-body .md-quote { border-left: 3px solid var(--accent); padding: 4px 12px; margin: 6px 0; background: var(--accent-glow); color: var(--muted); border-radius: 0 4px 4px 0; }
+.msg-body .md-inline-code { background: var(--surface2); padding: 1px 5px; border-radius: 3px; font-size: 0.72rem; font-family: var(--font-mono); }
+.msg-body .md-code-block { background: var(--surface2); padding: 8px 12px; border-radius: 6px; overflow-x: auto; margin: 6px 0; font-size: 0.75rem; }
+.msg-body .md-link { color: var(--accent); text-decoration: underline; }
+.msg-body .md-hr { border: none; border-top: 1px solid var(--border-light); margin: 8px 0; }
+.msg-body .msg-user-text { white-space: pre-wrap; }
+.msg-body { overflow-x: auto; }
+
 /* Status indicator */
 .chat-status { padding: 6px 14px; font-size: 0.7rem; color: var(--muted); background: var(--surface2); border-top: 1px solid var(--border); display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .chat-status .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: pulse 1.5s infinite; }

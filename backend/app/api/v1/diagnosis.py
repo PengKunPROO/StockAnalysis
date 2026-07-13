@@ -8,6 +8,18 @@ from app.diagnosis.sessions import (
     get_session_stocks, get_messages, list_sessions, save_message,
 )
 from app.diagnosis.skills_manager import get_skill_content
+from app.diagnosis.hermes_skills import get_hermes_skill_content
+
+
+def _resolve_skill_content(skill_name: str) -> str:
+    """Resolve skill content from uploaded skills first, then hermes skills."""
+    content = get_skill_content(skill_name)
+    if content:
+        return content
+    content = get_hermes_skill_content(skill_name)
+    if content:
+        return content
+    return ""
 
 ANSI_RE = re.compile(r'\x1b\[[0-9;]*m')
 ANALYSIS_START = re.compile(r'╭─.*Hermes.*─+╮')
@@ -79,7 +91,7 @@ async def chat(req: ChatRequest):
     stocks = await get_session_stocks(sid)
 
     stock_list = ", ".join(f"{s['name']}({s['code']})" for s in stocks)
-    skill_content = get_skill_content(req.skill) or ""
+    skill_content = _resolve_skill_content(req.skill)
 
     # Pre-fetch recent news context for analysis
     news_context = ""
@@ -96,6 +108,7 @@ async def chat(req: ChatRequest):
     prompt = f"""{skill_content}
 
 你是股票分析 Agent。可以通过终端运行 curl 获取数据。后端运行在 localhost:8002。
+当前使用的 Skill: {req.skill}
 
 ## 可用数据 API (每次 curl 加 --max-time 15):
 - 搜索: curl -s --max-time 15 "http://localhost:8002/api/v1/search?q=<关键词>"

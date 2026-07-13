@@ -1,26 +1,41 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, memo } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { useApp } from '../contexts/AppContext'
 import { chatStream } from '../api/diagnosis'
 import type { ChatMessage as ChatMsg, SkillMeta } from '../types'
 
-function renderMd(text: string): string {
-  let html = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-  html = html.replace(/(^\|.+\|$\n?)+/gm, (block: string) => {
-    const rows = block.trim().split('\n').filter(r => r.includes('|'))
-    if (rows.length < 2) return block
-    const cells = (r: string) => r.split('|').filter((_, i, a) => i > 0 && i < a.length - 1).map(c => c.trim())
-    const sep = rows[1]
-    if (!sep || !/^[|\s\-:]+$/.test(sep.replace(/\|/g, '').trim())) return block
-    return `<table><thead><tr>${cells(rows[0]).map(c => `<th>${c}</th>`).join('')}</tr></thead><tbody>${rows.slice(2).map(r => `<tr>${cells(r).map(c => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table>`
-  })
-  html = html.replace(/^### (.+)$/gm, '<h4>$1</h4>').replace(/^## (.+)$/gm, '<h3>$1</h3>').replace(/^# (.+)$/gm, '<h2>$1</h2>')
-  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-  html = html.replace(/`([^`]+)`/g, '<code>$1</code>')
-  html = html.replace(/^- (.+)$/gm, '<li>$1</li>').replace(/((?:<li>.*<\/li>\n?)+)/g, '<ul>$1</ul>')
-  html = html.replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>')
-  html = html.replace(/\n/g, '<br/>')
-  return html
+function MarkdownContent({ content }: { content: string }) {
+  return (
+    <div className="msg-body">
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
+        table: ({ children }) => <table className="md-table">{children}</table>,
+        th: ({ children }) => <th>{children}</th>,
+        td: ({ children }) => <td>{children}</td>,
+        code: ({ children, className }) => {
+          const isBlock = className?.includes('language-')
+          return isBlock ? <pre className="md-code-block"><code>{children}</code></pre> : <code className="md-inline-code">{children}</code>
+        },
+        blockquote: ({ children }) => <blockquote className="md-quote">{children}</blockquote>,
+        ul: ({ children }) => <ul className="md-ul">{children}</ul>,
+        ol: ({ children }) => <ol className="md-ol">{children}</ol>,
+        li: ({ children }) => <li className="md-li">{children}</li>,
+        h1: ({ children }) => <h2 className="md-h1">{children}</h2>,
+        h2: ({ children }) => <h3 className="md-h2">{children}</h3>,
+        h3: ({ children }) => <h4 className="md-h3">{children}</h4>,
+        h4: ({ children }) => <h5 className="md-h4">{children}</h5>,
+        p: ({ children }) => <p className="md-p">{children}</p>,
+        strong: ({ children }) => <strong className="md-strong">{children}</strong>,
+        a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="md-link">{children}</a>,
+        hr: () => <hr className="md-hr" />,
+      }}>
+        {content}
+      </ReactMarkdown>
+    </div>
+  )
 }
+
+const MemoMarkdown = memo(MarkdownContent)
 
 function MsgBubble({ msg }: { msg: ChatMsg }) {
   const isUser = msg.role === 'user'
@@ -30,7 +45,7 @@ function MsgBubble({ msg }: { msg: ChatMsg }) {
   return (
     <div className={`msg ${isUser ? 'user' : 'ai'}`}>
       <div className="role">{isUser ? '你' : 'AI 分析'}</div>
-      {isUser ? msg.content : <div className="msg-body" dangerouslySetInnerHTML={{ __html: renderMd(msg.content) }} />}
+      {isUser ? <div className="msg-body msg-user-text">{msg.content}</div> : <MemoMarkdown content={msg.content} />}
     </div>
   )
 }
