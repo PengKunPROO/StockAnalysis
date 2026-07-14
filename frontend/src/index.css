@@ -367,6 +367,15 @@ a:hover { text-decoration: underline; }
 .sig-badge { background: var(--accent-glow); color: var(--accent); padding: 1px 5px; border-radius: 3px; font-size: 0.58rem; margin-right: 3px; }
 .empty-row { text-align: center; color: var(--muted); padding: 24px; font-size: 0.7rem; }
 
+/* Factor detail expandable row */
+.factor-detail-row { background: var(--surface2); }
+.factor-detail-row > td { padding: 6px 12px 6px 24px; }
+.factor-detail-table { width: 100%; border-collapse: collapse; font-size: 0.68rem; }
+.factor-detail-table th { color: var(--muted); font-weight: 600; text-align: left; padding: 3px 8px; border-bottom: 1px solid var(--border-light); font-size: 0.6rem; }
+.factor-detail-table td { padding: 3px 8px; border-bottom: 1px solid var(--border-light); color: var(--text); }
+.factor-detail-table .factor-pass { color: var(--accent); font-weight: 700; }
+.factor-detail-table .factor-fail { color: var(--up); font-weight: 700; }
+
 /* === Intelligence View (市场情报) === */
 .intelligence-view { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .intel-dashboard { border-bottom: 1px solid var(--border); background: var(--surface2); }

@@ -2,6 +2,7 @@
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
 from app.screener import get_fields, run_screener, list_skills
+from app.screener.fields import SORTABLE
 
 router = APIRouter(prefix="/screener", tags=["screener"])
 
@@ -29,9 +30,7 @@ class RunRequest(BaseModel):
 
 @router.post("/run")
 async def run(req: RunRequest):
-    sort = req.sort if req.sort in (
-        "change_pct", "roe", "pe_ttm", "pb", "turnover", "amount", "total_market_cap"
-    ) else "change_pct"
+    sort = req.sort if req.sort in SORTABLE else "change_pct"
     limit = max(1, min(req.limit, 200))
     result = await run_screener(req.fields, sort=sort, limit=limit)
     return result
