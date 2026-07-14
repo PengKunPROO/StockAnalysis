@@ -77,11 +77,25 @@ export default function PortfolioView() {
     setGenerating(true)
     try {
       await generateReport()
-      // Poll for report after a delay
-      setTimeout(async () => {
+      // Poll report status until completed or failed (max 5 min)
+      const startTime = Date.now()
+      const poll = async () => {
+        if (Date.now() - startTime > 300000) { // 5 min timeout
+          setGenerating(false)
+          return
+        }
         await loadReport(reportDate)
-        setGenerating(false)
-      }, 5000)
+        // Check if report is completed or failed
+        try {
+          const r = await getReport(reportDate)
+          if (r && (r.status === 'completed' || r.status === 'failed')) {
+            setGenerating(false)
+            return
+          }
+        } catch {}
+        setTimeout(poll, 10000) // poll every 10s
+      }
+      setTimeout(poll, 5000) // first check after 5s
     } catch {
       setGenerating(false)
     }
