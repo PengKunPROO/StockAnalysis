@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Stock Agent · Terminal Vision</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;700&family=Noto+Sans+SC:wght@300;400;600;700&display=swap');
+
+:root {
+  --bg:#06060c; --surf:#0a0a18; --surf2:#0f0f24;
+  --text:#8899b4; --h:#c8d6e5; --muted:#4a5670;
+  --up:#00e676; --down:#ff1744;
+  --acc:#00b0ff; --acc2:#d500f9; --gold:#ffab00;
+  --border:#1a1a38;
+  --glow:0 0 20px rgba(0,176,255,.15);
+  --font:'JetBrains Mono','Noto Sans SC',monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font:13px/1.6 var(--font);background:var(--bg);color:var(--text);overflow:hidden;height:100vh;}
+body::before{
+  content:'';position:fixed;inset:0;
+  background:radial-gradient(ellipse at 20% 50%,rgba(0,176,255,.03) 0%,transparent 50%),
+             radial-gradient(ellipse at 80% 20%,rgba(213,0,249,.02) 0%,transparent 40%),
+             repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(255,255,255,.003) 2px,rgba(255,255,255,.003) 4px);
+  pointer-events:none;z-index:0;
+}
+
+.app{display:flex;height:100vh;position:relative;z-index:1;}
+
+/* Sidebar — glass panels */
+.side{width:220px;background:var(--surf);border-right:1px solid var(--border);display:flex;flex-direction:column;backdrop-filter:blur(10px);}
+.side-hd{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;}
+.side-hd .logo{font-size:16px;font-weight:700;color:var(--acc);letter-spacing:2px;text-shadow:var(--glow);}
+.side-hd .ver{font-size:9px;color:var(--muted);margin-left:auto;border:1px solid var(--border);padding:1px 6px;border-radius:3px;}
+.side-tabs{display:flex;border-bottom:1px solid var(--border);}
+.side-tab{flex:1;text-align:center;padding:8px;font-size:10px;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;transition:.2s;}
+.side-tab:hover{color:var(--h);}
+.side-tab.on{color:var(--acc);border-bottom-color:var(--acc);}
+.side-list{flex:1;overflow-y:auto;padding:4px 0;}
+.stock{display:flex;align-items:center;gap:6px;padding:8px 16px;cursor:pointer;border-left:3px solid transparent;transition:.15s;font-size:11px;}
+.stock:hover{background:rgba(0,176,255,.04);}
+.stock.sel{background:rgba(0,176,255,.08);border-left-color:var(--acc);}
+.stock .n{color:var(--h);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.stock .c{color:var(--muted);font-size:9px;}
+.stock .p{font-size:11px;font-weight:600;}
+.stock .up{color:var(--up);}.stock .dn{color:var(--down);}
+.stock .del{display:none;color:var(--down);font-size:12px;margin-left:4px;}
+.stock:hover .del{display:inline;}
+
+/* Main area */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+
+/* Topbar — thin command bar */
+.top{display:flex;align-items:center;gap:12px;padding:6px 16px;border-bottom:1px solid var(--border);background:var(--surf);}
+.top input{flex:1;padding:6px 12px;border:none;background:var(--surf2);color:var(--h);font:12px var(--font);border-radius:4px;max-width:360px;outline:1px solid transparent;transition:.2s;}
+.top input:focus{outline-color:var(--acc);}
+.top .idx{display:flex;gap:20px;font-size:11px;}
+.top .idx .up{color:var(--up);}.top .idx .dn{color:var(--down);}
+.top .nav{display:flex;gap:4px;margin-left:auto;}
+.top .nav span{padding:4px 12px;border-radius:4px;font-size:10px;cursor:pointer;color:var(--muted);border:1px solid var(--border);transition:.2s;}
+.top .nav span:hover{color:var(--h);border-color:var(--acc);}
+.top .nav span.on{background:var(--acc);color:#000;border-color:var(--acc);font-weight:600;}
+
+/* Content grid */
+.content{flex:1;display:flex;overflow:hidden;}
+
+/* Left: chart + info */
+.center{flex:1;display:flex;flex-direction:column;overflow-y:auto;min-width:0;}
+
+/* Stock header bar */
+.stkhd{padding:10px 16px;display:flex;align-items:baseline;gap:8px;border-bottom:1px solid var(--border);}
+.stkhd .name{font-size:18px;color:var(--h);font-weight:700;}
+.stkhd .code{font-size:10px;color:var(--muted);}
+.stkhd .price{font-size:26px;font-weight:700;margin-left:auto;text-shadow:0 0 10px rgba(0,176,255,.3);}
+.stkhd .chg{font-size:14px;margin-left:6px;}
+
+/* K-line */
+.kline{height:300px;background:var(--surf2);border-bottom:1px solid var(--border);position:relative;overflow:hidden;flex-shrink:0;}
+.kline canvas,.kline svg{width:100%;height:100%;}
+.kline-overlay{position:absolute;bottom:10px;left:16px;display:flex;gap:8px;z-index:2;}
+.kline-overlay span{padding:2px 8px;border-radius:3px;font-size:9px;background:rgba(0,176,255,.1);border:1px solid rgba(0,176,255,.3);color:var(--acc);}
+
+/* Stats bar */
+.stats{display:flex;gap:1px;background:var(--border);}
+.stats .cell{flex:1;background:var(--surf);padding:6px 8px;text-align:center;font-size:10px;}
+.stats .cell .l{color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:2px;}
+.stats .cell .v{font-size:13px;color:var(--h);font-weight:600;}
+.stats .cell .v.up{color:var(--up);}.stats .cell .v.dn{color:var(--down);}
+
+/* Panels below chart */
+.panels{display:flex;flex:1;overflow:hidden;border-top:1px solid var(--border);}
+
+/* Signals panel */
+.signals{flex:1;border-right:1px solid var(--border);overflow-y:auto;padding:8px 12px;}
+.signals h3{font-size:11px;color:var(--acc);text-transform:uppercase;letter-spacing:2px;margin-bottom:8px;display:flex;align-items:center;gap:6px;}
+.signals h3::after{content:'';flex:1;height:1px;background:var(--border);}
+.signal{display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:4px;margin-bottom:4px;font-size:10px;}
+.signal.buy{background:rgba(0,230,118,.06);border-left:2px solid var(--up);}
+.signal.sell{background:rgba(255,23,68,.06);border-left:2px solid var(--down);}
+.signal .tag{font-weight:700;font-size:9px;text-transform:uppercase;min-width:30px;}
+.signal.buy .tag{color:var(--up);}.signal.sell .tag{color:var(--down);}
+.signal .info{flex:1;color:var(--text);}
+.signal .level{color:var(--muted);font-size:9px;}
+
+/* Risk card */
+.risk{margin-top:12px;padding:10px 12px;background:var(--surf2);border-radius:6px;border:1px solid var(--border);}
+.risk h4{font-size:10px;color:var(--gold);margin-bottom:6px;text-transform:uppercase;letter-spacing:1px;}
+.risk .row{display:flex;justify-content:space-between;padding:3px 0;font-size:10px;}
+.risk .row .l{color:var(--muted);}.risk .row .v{color:var(--h);font-weight:600;}
+
+/* Chat / AI panel */
+.chat{flex:1;display:flex;flex-direction:column;overflow-y:auto;padding:8px 12px;}
+.chat h3{font-size:11px;color:var(--gold);text-transform:uppercase;letter-spacing:2px;margin-bottom:8px;display:flex;align-items:center;gap:6px;}
+.chat h3::after{content:'';flex:1;height:1px;background:var(--border);}
+.msg{margin-bottom:8px;font-size:11px;}
+.msg .role{font-size:9px;font-weight:700;margin-bottom:2px;text-transform:uppercase;letter-spacing:1px;}
+.msg.ai .role{color:var(--acc);}.msg.user .role{color:var(--gold);}
+.msg.ai .body{color:var(--text);line-height:1.5;}
+.msg.ai .body table{width:100%;border-collapse:collapse;margin:4px 0;font-size:9px;}
+.msg.ai .body th,.msg.ai .body td{border:1px solid var(--border);padding:3px 6px;text-align:left;}
+.msg.ai .body th{background:var(--surf2);color:var(--h);}
+.chat-inp{display:flex;gap:6px;margin-top:auto;padding-top:8px;}
+.chat-inp textarea{flex:1;padding:6px 10px;border-radius:4px;border:1px solid var(--border);background:var(--surf2);color:var(--h);font:11px var(--font);resize:none;height:30px;}
+.chat-inp button{padding:4px 16px;border-radius:4px;border:none;background:var(--acc);color:#000;font:11px var(--font);font-weight:600;cursor:pointer;}
+
+/* Right: news + screener sidebar */
+.rside{width:300px;background:var(--surf);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;flex-shrink:0;}
+.rside-header{padding:10px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px;}
+.rside-header span{font-size:11px;color:var(--h);font-weight:600;text-transform:uppercase;letter-spacing:1px;}
+.rside-header select{margin-left:auto;border:1px solid var(--border);background:var(--surf2);color:var(--h);font-size:9px;padding:2px 6px;border-radius:3px;}
+.news-item{padding:8px 12px;border-bottom:1px solid rgba(26,26,56,.5);cursor:pointer;transition:.15s;}
+.news-item:hover{background:rgba(0,176,255,.04);}
+.news-item .t{font-size:11px;color:var(--h);line-height:1.5;margin-bottom:2px;}
+.news-item .s{font-size:9px;color:var(--muted);}
+.news-item .impact{padding:2px 6px;border-radius:2px;font-size:8px;display:inline-block;margin-top:3px;}
+.news-item .impact.up{background:rgba(0,230,118,.15);color:var(--up);}
+.news-item .impact.dn{background:rgba(255,23,68,.15);color:var(--down);}
+
+/* Screener mode overlay */
+.screener-overlay{position:absolute;inset:0;background:var(--bg);z-index:10;display:none;padding:20px;}
+.screener-overlay.on{display:flex;flex-direction:column;}
+.screener-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:16px;}
+.screener-bar label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;}
+.screener-bar input,.screener-bar select{padding:4px 8px;border-radius:3px;border:1px solid var(--border);background:var(--surf2);color:var(--h);font:10px var(--font);width:80px;}
+.screener-table{width:100%;border-collapse:collapse;font-size:10px;}
+.screener-table th{background:var(--surf);color:var(--h);padding:10px 12px;text-align:left;border-bottom:2px solid var(--acc);text-transform:uppercase;letter-spacing:1px;font-size:9px;}
+.screener-table td{padding:8px 12px;border-bottom:1px solid var(--border);}
+.screener-table tr:hover td{background:rgba(0,176,255,.04);}
+.screener-table tr{cursor:pointer;}
+
+/* Scrollbar */
+::-webkit-scrollbar{width:4px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- Sidebar -->
+  <div class="side">
+    <div class="side-hd">
+      <span class="logo">STOCK<span style="color:var(--acc2)">/</span>AI</span>
+      <span class="ver">v3.0</span>
+    </div>
+    <div class="side-tabs">
+      <div class="side-tab on">全部</div>
+      <div class="side-tab">科技</div>
+      <div class="side-tab">消费</div>
+    </div>
+    <div class="side-list">
+      <div class="stock sel"><span class="n">贵州茅台</span><span class="c">600519</span><span class="p up">+0.84</span><span class="del">×</span></div>
+      <div class="stock"><span class="n">工业富联</span><span class="c">601138</span><span class="p dn">-2.31</span><span class="del">×</span></div>
+      <div class="stock"><span class="n">宁德时代</span><span class="c">300750</span><span class="p up">+1.52</span><span class="del">×</span></div>
+      <div class="stock"><span class="n">中国神华</span><span class="c">601088</span><span class="p up">+0.31</span><span class="del">×</span></div>
+      <div class="stock"><span class="n">长江电力</span><span class="c">600900</span><span class="p dn">-0.67</span><span class="del">×</span></div>
+    </div>
+  </div>
+
+  <!-- Main -->
+  <div class="main">
+    <div class="top">
+      <input placeholder="搜索股票代码 / 名称..." value="贵州茅台">
+      <div class="idx"><span>上证</span> <span class="up">4,043.64</span> +0.37% &nbsp; <span>深证</span> <span class="dn">15,597.51</span> -0.64%</div>
+      <div class="nav">
+        <span class="on" onclick="this.parentElement.querySelectorAll('span').forEach(s=>s.classList.remove('on'));this.classList.add('on')">📈 分析</span>
+        <span onclick="this.parentElement.querySelectorAll('span').forEach(s=>s.classList.remove('on'));this.classList.add('on')">🔍 选股</span>
+        <span onclick="this.parentElement.querySelectorAll('span').forEach(s=>s.classList.remove('on'));this.classList.add('on')">📊 对比</span>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="center">
+        <div class="stkhd">
+          <span class="name">贵州茅台</span><span class="code">SH.600519</span>
+          <span class="price" style="color:var(--up)">1,194.45</span>
+          <span class="chg" style="color:var(--up)">+10.00 (+0.84%)</span>
+        </div>
+
+        <div class="stats">
+          <div class="cell"><div class="l">开盘</div><div class="v">1,195</div></div>
+          <div class="cell"><div class="l">最高</div><div class="v up">1,210</div></div>
+          <div class="cell"><div class="l">最低</div><div class="v dn">1,185</div></div>
+          <div class="cell"><div class="l">ROE</div><div class="v">10.6%</div></div>
+          <div class="cell"><div class="l">负债率</div><div class="v">12.1%</div></div>
+          <div class="cell"><div class="l">MACD</div><div class="v dn">-2.84</div></div>
+          <div class="cell"><div class="l">RSI(14)</div><div class="v">37.3</div></div>
+          <div class="cell"><div class="l">KDJ-J</div><div class="v" style="color:var(--gold)">-2.1</div></div>
+        </div>
+
+        <div class="kline">
+          <svg viewBox="0 0 800 280">
+            <defs><linearGradient id="g1" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#0a0a18"/><stop offset="100%" stop-color="#06060c"/></linearGradient></defs>
+            <rect width="800" height="280" fill="url(#g1)"/>
+            <g transform="translate(40,15)">
+              <!-- Grid -->
+              <line x1="0" y1="50" x2="720" y2="50" stroke="#1a1a38" stroke-dasharray="3,6"/>
+              <line x1="0" y1="100" x2="720" y2="100" stroke="#1a1a38" stroke-dasharray="3,6"/>
+              <line x1="0" y1="150" x2="720" y2="150" stroke="#1a1a38" stroke-dasharray="3,6"/>
+              <line x1="0" y1="200" x2="720" y2="200" stroke="#1a1a38" stroke-dasharray="3,6"/>
+              <!-- Price line -->
+              <polyline fill="none" stroke="#00b0ff" stroke-width="2" points="0,80 60,75 120,70 180,60 240,65 300,50 360,40 420,25 480,30 540,20 600,15 660,18 720,12"/>
+              <!-- MA line -->
+              <polyline fill="none" stroke="#d500f9" stroke-width="1" opacity="0.6" points="0,90 60,85 120,80 180,70 240,75 300,60 360,50 420,35 480,40 540,30 600,25 660,28 720,22"/>
+              <!-- Volume bars -->
+              <g transform="translate(0,210)">
+                <rect x="0" y="20" width="7" height="15" fill="rgba(0,230,118,.3)"/>
+                <rect x="12" y="10" width="7" height="25" fill="rgba(255,23,68,.3)"/>
+                <rect x="24" y="15" width="7" height="20" fill="rgba(0,230,118,.3)"/>
+                <rect x="36" y="5" width="7" height="30" fill="rgba(0,230,118,.3)"/>
+                <rect x="48" y="22" width="7" height="13" fill="rgba(255,23,68,.3)"/>
+                <rect x="60" y="8" width="7" height="27" fill="rgba(0,230,118,.3)"/>
+                <rect x="72" y="12" width="7" height="23" fill="rgba(0,230,118,.3)"/>
+                <rect x="84" y="3" width="7" height="32" fill="rgba(0,230,118,.4)"/>
+                <rect x="96" y="18" width="7" height="17" fill="rgba(0,230,118,.3)"/>
+                <rect x="108" y="6" width="7" height="29" fill="rgba(0,230,118,.4)"/>
+              </g>
+              <!-- Labels -->
+              <text x="-35" y="55" fill="#4a5670" font-size="9" font-family="JetBrains Mono">1,274</text>
+              <text x="-35" y="105" fill="#4a5670" font-size="9" font-family="JetBrains Mono">1,217</text>
+              <text x="-35" y="155" fill="#4a5670" font-size="9" font-family="JetBrains Mono">1,160</text>
+              <text x="-35" y="210" fill="#4a5670" font-size="9" font-family="JetBrains Mono">VOL</text>
+            </g>
+          </svg>
+          <div class="kline-overlay">
+            <span>日线</span><span>MA25</span><span>BOLL</span><span style="background:rgba(213,0,249,.1);border-color:rgba(213,0,249,.3);color:var(--acc2)">斐波那契</span>
+          </div>
+        </div>
+
+        <!-- Lower panels: signals + chat -->
+        <div class="panels">
+          <div class="signals">
+            <h3>⚡ 交易信号</h3>
+            <div class="signal buy"><span class="tag">买入</span><span class="info">KDJ 金叉形成</span><span class="level">J:-2.1→53.7</span></div>
+            <div class="signal buy"><span class="tag">超卖</span><span class="info">J值极端超卖反弹</span><span class="level">布林下轨</span></div>
+            <div class="signal sell"><span class="tag">卖出</span><span class="info">MACD 死叉持续</span><span class="level">DIF:-22.3</span></div>
+            <div class="signal sell"><span class="tag">弱势</span><span class="info">RSI 偏弱区间</span><span class="level">37.3</span></div>
+
+            <div class="risk">
+              <h4>🎯 风控参考</h4>
+              <div class="row"><span class="l">止损位 (ATR)</span><span class="v" style="color:var(--down)">¥1,152.00</span></div>
+              <div class="row"><span class="l">止盈位 (阻力)</span><span class="v" style="color:var(--up)">¥1,274.90</span></div>
+              <div class="row"><span class="l">支撑 (布林下)</span><span class="v">¥1,160.00</span></div>
+              <div class="row"><span class="l">建议仓位</span><span class="v" style="color:var(--gold)">30%</span></div>
+            </div>
+          </div>
+
+          <div class="chat">
+            <h3>🤖 AI 诊断</h3>
+            <div class="msg ai">
+              <div class="role">AI · 技术分析</div>
+              <div class="body">
+                <table><tr><th>指标</th><th>数值</th><th>信号</th></tr>
+                <tr><td>MACD</td><td style="color:var(--down)">-2.84</td><td>空头加速</td></tr>
+                <tr><td>KDJ-J</td><td style="color:var(--gold)">-2.13</td><td>极端超卖</td></tr></table>
+                短期 KDJ 超卖 + 布林下轨支撑，技术性反弹概率大。MACD 中期仍空，反弹目标看 1,217（中轨）。
+              </div>
+            </div>
+            <div class="msg user"><div class="role">你</div><div class="body">后市如何看？</div></div>
+            <div class="msg ai">
+              <div class="role">AI · 综合分析</div>
+              <div class="body">短期（1-2周）：KDJ超卖反弹目标1,217。中期（1-3月）：MACD空头未收敛，需DIF走平确认筑底。关键观察成交量配合。</div>
+            </div>
+            <div class="chat-inp"><textarea placeholder="提问..."></textarea><button>↵</button></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right sidebar: news -->
+      <div class="rside">
+        <div class="rside-header"><span>📰 情报</span><select><option>全部</option><option>龙虎榜</option><option>北向资金</option></select></div>
+        <div class="news-item">
+          <div class="t">茅台Q2营收增长15%超预期</div>
+          <div class="s">东方财富 · 2h前</div>
+          <div class="impact up">利好</div>
+        </div>
+        <div class="news-item">
+          <div class="t">白酒板块集体回调，消费税改革担忧</div>
+          <div class="s">雪球 · 5h前</div>
+          <div class="impact dn">利空</div>
+        </div>
+        <div class="news-item">
+          <div class="t">北向资金连续3日净买入茅台</div>
+          <div class="s">新浪财经 · 8h前</div>
+          <div class="impact up">利好</div>
+        </div>
+        <div class="news-item">
+          <div class="t">中秋旺季临近，经销商备货回升</div>
+          <div class="s">21财经 · 昨天</div>
+          <div class="impact up">利好</div>
+        </div>
+        <div class="news-item">
+          <div class="t">茅台获ESG评级A级，白酒首例</div>
+          <div class="s">中证报 · 昨天</div>
+          <div class="impact up">利好</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

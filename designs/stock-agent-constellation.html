@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Stock Agent · Constellation</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Noto+Sans+SC:wght@300;400;700&display=swap');
+
+/* === COSMIC VARIABLES === */
+:root {
+  --void:#020210; --space:#080824; --nebula:#0d0d30;
+  --text:#7b8db8; --h:#c8d4f0; --muted:#3a4a6a;
+  --up:#4ef0a0; --down:#ff4d6a;
+  --acc:#60b0ff; --gold:#ffc040;
+  --star:rgba(96,176,255,.15);
+  --font:'DM Mono','Noto Sans SC',monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font:12px/1.6 var(--font);background:var(--void);color:var(--text);overflow:hidden;height:100vh}
+
+/* === STARFIELD === */
+#starfield{position:fixed;inset:0;z-index:0}
+.star{position:absolute;border-radius:50%;animation:twinkle var(--d) ease-in-out infinite;animation-delay:var(--delay)}
+@keyframes twinkle{0%,100%{opacity:.2}50%{opacity:.8}}
+
+/* === COSMIC GLOW === */
+body::before{content:'';position:fixed;inset:0;z-index:1;pointer-events:none;
+  background:
+    radial-gradient(ellipse 900px 600px at 20% 30%,rgba(96,176,255,.03) 0%,transparent 60%),
+    radial-gradient(ellipse 600px 500px at 80% 70%,rgba(255,64,192,.02) 0%,transparent 50%),
+    radial-gradient(ellipse 400px 300px at 50% 50%,rgba(255,192,64,.01) 0%,transparent 40%);}
+
+/* === APP SHELL === */
+.app{position:relative;z-index:2;display:flex;height:100vh}
+
+/* === NAVBAR: gravitational center === */
+.nav{width:56px;background:rgba(8,8,36,.8);border-right:1px solid rgba(96,176,255,.1);
+  display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 0;flex-shrink:0}
+.nav .ico{width:40px;height:40px;display:flex;align-items:center;justify-content:center;
+  font-size:18px;border-radius:12px;cursor:pointer;transition:all .4s cubic-bezier(.4,0,.2,1);
+  position:relative;color:var(--muted)}
+.nav .ico:hover,.nav .ico.on{color:var(--acc);transform:scale(1.1)}
+.nav .ico.on::after{content:'';position:absolute;inset:-4px;border-radius:16px;
+  border:1px solid rgba(96,176,255,.3);animation:orbit 4s linear infinite}
+@keyframes orbit{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
+.nav .ico.on{background:rgba(96,176,255,.08)}
+.nav .spacer{flex:1}
+
+/* === MAIN === */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+
+/* === TOP BAR: thin nebula strip === */
+.top{display:flex;align-items:center;gap:16px;padding:6px 20px;
+  background:rgba(8,8,36,.6);border-bottom:1px solid rgba(96,176,255,.08)}
+.top .brand{font-size:11px;font-weight:500;color:var(--acc);letter-spacing:4px;text-transform:uppercase}
+.top input{flex:1;max-width:360px;padding:5px 14px;
+  border:1px solid rgba(96,176,255,.15);border-radius:16px;
+  background:rgba(0,0,0,.3);color:var(--acc);font:11px var(--font);outline:none}
+.top input:focus{border-color:rgba(96,176,255,.4);box-shadow:0 0 20px rgba(96,176,255,.08)}
+.top .modes{display:flex;gap:2px;background:rgba(96,176,255,.04);border-radius:16px;padding:2px;margin-left:auto}
+.top .modes span{padding:4px 14px;border-radius:14px;font-size:9px;cursor:pointer;
+  transition:all .3s;color:var(--muted);text-transform:uppercase;letter-spacing:1px}
+.top .modes span:hover{color:var(--h)}
+.top .modes span.on{background:rgba(96,176,255,.12);color:var(--acc)}
+
+/* === CONTENT GRID === */
+.content{flex:1;display:flex;overflow:hidden}
+
+/* === CENTER: chart zone === */
+.center{flex:1;display:flex;flex-direction:column;overflow:hidden}
+
+/* Stock identity */
+.id{display:flex;align-items:center;gap:14px;padding:14px 20px}
+.id .orb{width:44px;height:44px;border-radius:50%;
+  background:radial-gradient(circle,rgba(96,176,255,.2),transparent 70%);
+  border:2px solid rgba(96,176,255,.2);display:flex;align-items:center;justify-content:center;
+  font-size:18px;animation:orbPulse 3s ease-in-out infinite}
+@keyframes orbPulse{0%,100%{box-shadow:0 0 10px rgba(96,176,255,.2)}50%{box-shadow:0 0 30px rgba(96,176,255,.4)}}
+.id .info .n{font-size:18px;color:#fff;font-weight:400;letter-spacing:1px}
+.id .info .c{font-size:10px;color:var(--muted)}
+.id .pr{font-size:28px;font-weight:500;margin-left:auto;color:var(--up)}
+.id .ch{font-size:13px;margin-left:4px;color:var(--up)}
+.id .pills{display:flex;gap:6px;margin-left:16px}
+.id .pills span{padding:3px 12px;border-radius:12px;font-size:9px;border:1px solid}
+.id .pills .pg{border-color:rgba(78,240,160,.3);color:var(--up)}
+.id .pills .pr{border-color:rgba(255,77,106,.3);color:var(--down)}
+
+/* Chart */
+.chart{flex:1;position:relative;overflow:hidden}
+.chart svg{width:100%;height:100%}
+
+/* Stats ribbon */
+.stats{display:flex;gap:1px;background:rgba(96,176,255,.06)}
+.stats .cell{flex:1;text-align:center;padding:10px 4px;background:rgba(8,8,36,.5)}
+.stats .cell .l{font-size:8px;color:var(--muted);text-transform:uppercase;letter-spacing:2px;margin-bottom:3px}
+.stats .cell .v{font-size:14px;color:var(--h);font-weight:500}
+
+/* === RIGHT: dual panel === */
+.right{width:420px;display:flex;flex-direction:column;gap:1px;
+  background:rgba(96,176,255,.06);border-left:1px solid rgba(96,176,255,.08);flex-shrink:0}
+
+/* Signals */
+.sigs{background:rgba(8,8,36,.6);padding:14px 16px}
+.sigs h3{font-size:9px;color:var(--acc);text-transform:uppercase;letter-spacing:3px;margin-bottom:10px}
+.sigs .row{display:flex;align-items:center;gap:8px;padding:5px 10px;
+  border-radius:8px;margin-bottom:3px;font-size:10px;transition:all .2s}
+.sigs .row:hover{background:rgba(96,176,255,.04)}
+.sigs .row .pulse{width:5px;height:5px;border-radius:50%;flex-shrink:0}
+.sigs .row .pg .pulse{background:var(--up);box-shadow:0 0 8px var(--up)}
+.sigs .row .pr .pulse{background:var(--down);box-shadow:0 0 8px var(--down)}
+.sigs .row .txt{flex:1}.sigs .row .v{color:var(--muted);font-size:9px}
+
+/* Risk */
+.risk{background:rgba(96,176,255,.03);padding:10px 16px;
+  border:1px solid rgba(96,176,255,.08);border-radius:10px;margin:6px 12px}
+.risk h4{font-size:9px;color:var(--gold);text-transform:uppercase;letter-spacing:2px;margin-bottom:6px}
+.risk .r{display:flex;justify-content:space-between;padding:2px 0;font-size:10px}
+.risk .r .k{color:var(--muted)}.risk .r .v{color:var(--h);font-weight:500}
+
+/* AI chat */
+.chat{flex:1;background:rgba(8,8,36,.6);display:flex;flex-direction:column;overflow:hidden}
+.chat .msgs{flex:1;overflow-y:auto;padding:12px 16px}
+.chat .msg{margin-bottom:10px;font-size:10px;line-height:1.5}
+.chat .msg .role{font-size:8px;text-transform:uppercase;letter-spacing:2px;margin-bottom:3px}
+.chat .msg.ai .role{color:var(--acc)}.chat .msg.user .role{color:var(--gold)}
+.chat .msg.ai .body table{width:100%;border-collapse:collapse;margin:4px 0;font-size:9px}
+.chat .msg.ai .body td,.chat .msg.ai .body th{border:1px solid rgba(96,176,255,.1);padding:2px 6px}
+.chat .msg.ai .body th{background:rgba(96,176,255,.04);color:var(--acc)}
+.chat .inp{display:flex;gap:6px;padding:10px 16px;border-top:1px solid rgba(96,176,255,.06)}
+.chat .inp input{flex:1;padding:6px 12px;border-radius:16px;
+  border:1px solid rgba(96,176,255,.1);background:rgba(0,0,0,.3);
+  color:var(--acc);font:10px var(--font);outline:none}
+.chat .inp button{padding:4px 16px;border-radius:16px;border:none;
+  background:var(--acc);color:#000;font:10px var(--font);font-weight:600;cursor:pointer}
+
+/* === NEWS SIDEBAR === */
+.news{width:280px;background:rgba(8,8,36,.6);border-left:1px solid rgba(96,176,255,.08);
+  display:flex;flex-direction:column;overflow-y:auto;flex-shrink:0;padding:12px 14px}
+.news h3{font-size:9px;color:var(--acc);text-transform:uppercase;letter-spacing:3px;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.news h3::after{content:'';flex:1;height:1px;background:rgba(96,176,255,.1)}
+.news .item{padding:8px 0;border-bottom:1px solid rgba(96,176,255,.04);cursor:pointer}
+.news .item:hover .t{color:var(--acc)}
+.news .item .t{font-size:10px;color:var(--h);line-height:1.5;margin-bottom:2px;transition:.2s}
+.news .item .meta{font-size:8px;color:var(--muted);display:flex;gap:8px;align-items:center}
+.news .item .chip{font-size:7px;padding:1px 6px;border-radius:8px}
+.news .item .chip.up{background:rgba(78,240,160,.1);color:var(--up)}
+.news .item .chip.dn{background:rgba(255,77,106,.1);color:var(--down)}
+
+/* Scroll */
+::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:rgba(96,176,255,.1);border-radius:2px}
+</style>
+</head>
+<body>
+
+<!-- Starfield -->
+<div id="starfield"><script>
+for(let i=0;i<80;i++){let s=document.createElement('div');s.className='star';
+s.style.cssText=`left:${Math.random()*100}%;top:${Math.random()*100}%;width:${1+Math.random()*2}px;height:${1+Math.random()*2}px;--d:${2+Math.random()*4}s;--delay:${Math.random()*4}s;background:${['rgba(96,176,255,.6)','rgba(255,192,64,.5)','rgba(78,240,160,.4)'][i%3]}`;
+starfield.appendChild(s)}</script></div>
+
+<div class="app">
+  <!-- NAV -->
+  <div class="nav">
+    <div class="ico on" title="自选">✦</div>
+    <div class="ico" title="选股">⊕</div>
+    <div class="ico" title="对比">⊚</div>
+    <div class="spacer"></div>
+    <div class="ico" title="设置">⊙</div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="top">
+      <div class="brand">CONSTELLATION</div>
+      <input placeholder="搜索星体...">
+      <div class="modes"><span class="on">分析</span><span>选股</span><span>信号</span><span>情报</span></div>
+    </div>
+
+    <div class="content">
+      <!-- CENTER -->
+      <div class="center">
+        <div class="id">
+          <div class="orb">🍶</div>
+          <div class="info"><div class="n">贵州茅台</div><div class="c">SH.600519 · 白酒 · 2.1万亿</div></div>
+          <div class="pr">1,194.45</div><div class="ch">+0.84%</div>
+          <div class="pills"><span class="pg">KDJ超卖</span><span class="pr">MACD死叉</span></div>
+        </div>
+
+        <div class="chart">
+          <svg viewBox="0 0 600 300">
+            <defs>
+              <linearGradient id="glow" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="rgba(96,176,255,.12)"/><stop offset="100%" stop-color="transparent"/></linearGradient>
+            </defs>
+            <!-- Grid lines -->
+            <g stroke="rgba(96,176,255,.04)" stroke-width="1">
+              <line x1="50" y1="80" x2="570" y2="80"/><line x1="50" y1="150" x2="570" y2="150"/><line x1="50" y1="220" x2="570" y2="220"/>
+            </g>
+            <!-- Area -->
+            <polygon fill="url(#glow)" points="50,160 90,148 130,140 170,130 210,138 250,122 290,110 330,98 370,105 410,95 450,88 490,92 530,82 570,72 570,260 50,260"/>
+            <!-- Price -->
+            <polyline fill="none" stroke="#60b0ff" stroke-width="2.5" points="50,160 90,148 130,140 170,130 210,138 250,122 290,110 330,98 370,105 410,95 450,88 490,92 530,82 570,72" style="filter:drop-shadow(0 0 8px rgba(96,176,255,.5))"/>
+            <!-- Constellation dots -->
+            <circle cx="250" cy="122" r="3" fill="#60b0ff" opacity=".8"><animate attributeName="r" values="2;5;2" dur="3s" repeatCount="indefinite"/></circle>
+            <circle cx="290" cy="110" r="2" fill="#60b0ff" opacity=".6"><animate attributeName="r" values="1;4;1" dur="4s" repeatCount="indefinite"/></circle>
+            <circle cx="450" cy="88" r="2" fill="#ffc040" opacity=".5"><animate attributeName="r" values="1;3;1" dur="5s" repeatCount="indefinite"/></circle>
+            <!-- Labels -->
+            <text x="14" y="84" fill="#3a4a6a" font-size="9" font-family="DM Mono">1274</text>
+            <text x="14" y="154" fill="#3a4a6a" font-size="9">1217</text>
+            <text x="14" y="224" fill="#3a4a6a" font-size="9">1160</text>
+            <!-- Volume -->
+            <g transform="translate(50,240)">
+              <rect x="0" y="16" width="7" height="12" fill="rgba(96,176,255,.2)"/><rect x="12" y="10" width="7" height="18" fill="rgba(255,77,106,.2)"/>
+              <rect x="24" y="14" width="7" height="14" fill="rgba(96,176,255,.2)"/><rect x="36" y="6" width="7" height="22" fill="rgba(96,176,255,.3)"/>
+              <rect x="48" y="18" width="7" height="10" fill="rgba(255,77,106,.15)"/><rect x="60" y="8" width="7" height="20" fill="rgba(96,176,255,.25)"/>
+            </g>
+          </svg>
+        </div>
+
+        <div class="stats">
+          <div class="cell"><div class="l">open</div><div class="v">1,195</div></div>
+          <div class="cell"><div class="l">high</div><div class="v" style="color:var(--up)">1,210</div></div>
+          <div class="cell"><div class="l">low</div><div class="v" style="color:var(--down)">1,185</div></div>
+          <div class="cell"><div class="l">vol</div><div class="v">342万</div></div>
+          <div class="cell"><div class="l">roe</div><div class="v">10.6%</div></div>
+          <div class="cell"><div class="l">debt</div><div class="v">12.1%</div></div>
+          <div class="cell"><div class="l">macd</div><div class="v" style="color:var(--down)">-2.84</div></div>
+          <div class="cell"><div class="l">rsi</div><div class="v">37.3</div></div>
+          <div class="cell"><div class="l">kdj</div><div class="v" style="color:var(--gold)">-2.1</div></div>
+        </div>
+      </div>
+
+      <!-- RIGHT -->
+      <div class="right">
+        <div class="sigs">
+          <h3>✦ 信号脉冲</h3>
+          <div class="row pg"><div class="pulse"></div><div class="txt">KDJ 超卖反弹</div><div class="v">J:-2.1→53.7</div></div>
+          <div class="row pg"><div class="pulse"></div><div class="txt">布林下轨支撑</div><div class="v">¥1,160</div></div>
+          <div class="row pr"><div class="pulse"></div><div class="txt">MACD 死叉持续</div><div class="v">DIF:-22.3</div></div>
+          <div class="row pr"><div class="pulse"></div><div class="txt">RSI 弱势区间</div><div class="v">37.3</div></div>
+        </div>
+
+        <div class="risk">
+          <h4>✦ 风控轨道</h4>
+          <div class="r"><span class="k">止损</span><span class="v" style="color:var(--down)">1,152</span></div>
+          <div class="r"><span class="k">止盈</span><span class="v" style="color:var(--up)">1,274</span></div>
+          <div class="r"><span class="k">仓位</span><span class="v" style="color:var(--gold)">30%</span></div>
+        </div>
+
+        <div class="chat">
+          <div class="msgs">
+            <div class="msg ai">
+              <div class="role">Constellation · 诊断</div>
+              <div class="body">
+                <table><tr><th>指标</th><th>值</th><th>信号</th></tr><tr><td>MACD</td><td style="color:var(--down)">-2.84</td><td>空头</td></tr><tr><td>KDJ</td><td style="color:var(--gold)">-2.13</td><td>超卖</td></tr></table>
+                短期反弹目标1,217。中期需DIF走平确认筑底。
+              </div>
+            </div>
+            <div class="msg user"><div class="role">观测者</div><div class="body">后市如何看？</div></div>
+            <div class="msg ai"><div class="role">Constellation</div><div class="body">KDJ超卖+布林支撑→技术性反弹。MACD仍空，反弹后需成交量确认方向。</div></div>
+          </div>
+          <div class="inp"><input placeholder="向星图提问..."><button>→</button></div>
+        </div>
+      </div>
+
+      <!-- NEWS -->
+      <div class="news">
+        <h3>✦ 星际信号</h3>
+        <div class="item"><div class="t">茅台Q2营收增长15%超预期</div><div class="meta"><span>东方财富</span><span>2h前</span><span class="chip up">利好</span></div></div>
+        <div class="item"><div class="t">白酒板块集体回调，消费税担忧</div><div class="meta"><span>雪球</span><span>5h前</span><span class="chip dn">利空</span></div></div>
+        <div class="item"><div class="t">北向资金连续3日净买入茅台</div><div class="meta"><span>新浪财经</span><span>8h前</span><span class="chip up">利好</span></div></div>
+        <div class="item"><div class="t">中秋旺季临近，经销商备货回升</div><div class="meta"><span>21财经</span><span>昨天</span><span class="chip up">利好</span></div></div>
+        <div class="item"><div class="t">茅台获ESG评级A级</div><div class="meta"><span>中证报</span><span>昨天</span><span class="chip up">利好</span></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
