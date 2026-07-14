@@ -18,8 +18,11 @@ for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":5173 " ^| findstr "LISTENIN
     taskkill /F /T /PID %%a >NUL 2>&1
 )
 
-:: 4. Kill orphaned hermes subprocesses
-taskkill /F /IM hermes.exe >NUL 2>&1
+:: 4. Kill orphaned hermes subprocesses spawned by the backend
+::    (only kill hermes processes whose parent is the StockAgent backend, NOT all hermes.exe)
+for /f "tokens=2" %%p in ('tasklist /v /fo csv ^| findstr "StockAgent-BE" ^| findstr hermes') do (
+    taskkill /F /PID %%p >NUL 2>&1
+)
 
 :: 5. Close all related cmd windows
 taskkill /FI "WINDOWTITLE eq StockAgent-BE*" /F >NUL 2>&1
