@@ -70,9 +70,10 @@ class TestFields:
         assert matches_snapshot(stock, {"amplitude": {"min": 5}})
         assert not matches_snapshot(stock, {"amplitude": {"min": 7}})
 
-    def test_matches_snapshot_no_filters(self):
-        stock = {"change_pct": 1.0}
-        assert matches_snapshot(stock, {})
+    def test_matches_snapshot_null_skips_filter(self):
+        """When snapshot value is None (non-trading hours), skip filter instead of rejecting."""
+        stock = {"change_pct": None, "amount": None}
+        assert matches_snapshot(stock, {"change_pct": {"min": 3}})
 
     def test_sortable_includes_new_fields(self):
         assert "change_pct" in SORTABLE
