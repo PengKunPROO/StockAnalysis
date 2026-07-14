@@ -140,7 +140,7 @@ export default function ScreenerView() {
                     <td className="c" onClick={(e) => { e.stopPropagation(); setExpandedRow(isExpanded ? null : r.code) }} style={{ cursor: 'pointer' }}>
                       {r.factor_details ? (isExpanded ? '▼' : '▶') : ''}
                     </td>
-                    <td className="c accent">-></td>
+                    <td className="c accent">{'->'}</td>
                   </tr>
                   {isExpanded && r.factor_details && (
                     <tr key={r.code + '-detail'} className="factor-detail-row">

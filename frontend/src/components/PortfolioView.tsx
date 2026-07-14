@@ -134,6 +134,7 @@ export default function PortfolioView() {
               realtimePrices={realtimePrices}
               onDelete={handleDeleteHolding}
               onSell={handleSell}
+              onRefresh={loadHoldings}
             />
             <ResizableSplitter direction="vertical" onResize={() => {}} />
             <TransactionForm onSubmit={handleCreateTransaction} />
