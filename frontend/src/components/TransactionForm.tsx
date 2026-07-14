@@ -1,5 +1,6 @@
 // frontend/src/components/TransactionForm.tsx
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { stockLookup } from '../api/portfolio'
 
 interface TransactionFormProps {
   onSubmit: (data: {
@@ -19,12 +20,43 @@ export default function TransactionForm({ onSubmit, prefillCode, prefillName }: 
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
   const [note, setNote] = useState('')
   const [submitting, setSubmitting] = useState(false)
-
   const [error, setError] = useState('')
+  const [nameLoading, setNameLoading] = useState(false)
+  const lookupTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Auto-fill stock name when code changes (debounced)
+  useEffect(() => {
+    if (lookupTimer.current) clearTimeout(lookupTimer.current)
+    if (!code || code.length < 2) return
+    if (name && code.startsWith(('sh.', 'sz.'))) return
+    lookupTimer.current = setTimeout(async () => {
+      setNameLoading(true)
+      try {
+        const data = await stockLookup(code)
+        if (data.results.length > 0) {
+          const best = data.results[0]
+          setCode(best.code)
+          setName(best.name)
+        }
+      } catch { /* ignore */ } finally {
+        setNameLoading(false)
+      }
+    }, 500)
+    return () => { if (lookupTimer.current) clearTimeout(lookupTimer.current) }
+  }, [code])
+
+  const isAShare = code.startsWith(('sh.', 'sz.'))
+  const sharesNum = parseInt(shares, 10)
+  // Buy: must be 100 multiples. Sell: can be any positive number.
+  const sharesInvalid = shares && isAShare && action === 'buy' && (isNaN(sharesNum) || sharesNum % 100 !== 0)
 
   const handleSubmit = async () => {
     if (!code || !shares || !price) {
       setError('请填写代码、股数和价格')
+      return
+    }
+    if (sharesInvalid) {
+      setError('A股买入股数必须为100的整数倍')
       return
     }
     setError('')
@@ -56,12 +88,12 @@ export default function TransactionForm({ onSubmit, prefillCode, prefillName }: 
       <div className="tx-form">
         <div className="field">
           <label>股票代码</label>
-          <input type="text" placeholder="sh.600519" value={code}
-            onChange={e => setCode(e.target.value)} />
+          <input type="text" placeholder="sh.600519 或 600519" value={code}
+            onChange={e => { setCode(e.target.value); setName('') }} />
         </div>
         <div className="field">
-          <label>名称</label>
-          <input type="text" placeholder="名称" value={name}
+          <label>{nameLoading ? '搜索中...' : '名称'}</label>
+          <input type="text" placeholder="自动填充" value={name}
             onChange={e => setName(e.target.value)} style={{ width: 80 }} />
         </div>
         <div className="field">
@@ -74,9 +106,9 @@ export default function TransactionForm({ onSubmit, prefillCode, prefillName }: 
           </div>
         </div>
         <div className="field">
-          <label>股数</label>
+          <label>股数{isAShare && action === 'buy' ? ' (100整倍)' : ''}</label>
           <input type="number" value={shares} onChange={e => setShares(e.target.value)}
-            style={{ width: 60 }} placeholder="100" />
+            style={{ width: 60, border: sharesInvalid ? '1px solid var(--up)' : undefined }} placeholder="100" />
         </div>
         <div className="field">
           <label>价格</label>

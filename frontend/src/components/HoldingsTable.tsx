@@ -1,7 +1,7 @@
 // frontend/src/components/HoldingsTable.tsx
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import type { Holding } from '../api/portfolio'
-import { createHolding } from '../api/portfolio'
+import { createHolding, stockLookup } from '../api/portfolio'
 
 interface HoldingsTableProps {
   holdings: Holding[]
@@ -19,6 +19,35 @@ export default function HoldingsTable({ holdings, realtimePrices, onDelete, onSe
   const [addCost, setAddCost] = useState('')
   const [addDate, setAddDate] = useState(new Date().toISOString().slice(0, 10))
   const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState('')
+  const [nameLoading, setNameLoading] = useState(false)
+  const lookupTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Auto-fill stock name when code changes (debounced)
+  useEffect(() => {
+    if (lookupTimer.current) clearTimeout(lookupTimer.current)
+    if (!addCode || addCode.length < 2) return
+    // Skip if already has prefix and name is set
+    if (addName && addCode.startsWith(('sh.', 'sz.'))) return
+    lookupTimer.current = setTimeout(async () => {
+      setNameLoading(true)
+      try {
+        const data = await stockLookup(addCode)
+        if (data.results.length > 0) {
+          const best = data.results[0]
+          setAddCode(best.code)
+          setAddName(best.name)
+        }
+      } catch { /* ignore */ } finally {
+        setNameLoading(false)
+      }
+    }, 500)
+    return () => { if (lookupTimer.current) clearTimeout(lookupTimer.current) }
+  }, [addCode])
+
+  const isAShare = addCode.startsWith(('sh.', 'sz.'))
+  const sharesNum = parseInt(addShares, 10)
+  const sharesInvalid = addShares && isAShare && (isNaN(sharesNum) || sharesNum % 100 !== 0)
 
   const totalValue = holdings.reduce((sum, h) => {
     const price = realtimePrices[h.code]?.price ?? h.avg_cost
@@ -26,7 +55,15 @@ export default function HoldingsTable({ holdings, realtimePrices, onDelete, onSe
   }, 0)
 
   const handleAdd = async () => {
-    if (!addCode || !addShares || !addCost) return
+    if (!addCode || !addShares || !addCost) {
+      setError('请填写代码、股数和成本价')
+      return
+    }
+    if (sharesInvalid) {
+      setError('A股股数必须为100的整数倍')
+      return
+    }
+    setError('')
     setSubmitting(true)
     try {
       await createHolding({
@@ -39,6 +76,9 @@ export default function HoldingsTable({ holdings, realtimePrices, onDelete, onSe
       setAddCode(''); setAddName(''); setAddShares(''); setAddCost('')
       setShowAdd(false)
       onRefresh?.()
+    } catch (e: any) {
+      const msg = await e.json?.().catch(() => null)
+      setError(msg?.detail || e.message || '添加失败')
     } finally {
       setSubmitting(false)
     }
@@ -57,15 +97,15 @@ export default function HoldingsTable({ holdings, realtimePrices, onDelete, onSe
         <div style={{ padding: '8px 12px', background: 'var(--surface2)', borderBottom: '1px solid var(--border)', display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <div className="field">
             <label style={{ fontSize: '0.6rem', color: 'var(--muted)' }}>代码</label>
-            <input type="text" placeholder="sh.600519" value={addCode} onChange={e => setAddCode(e.target.value)} style={{ width: 100, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--heading)', padding: '4px 8px', fontSize: '0.72rem' }} />
+            <input type="text" placeholder="sh.600519 或 600519" value={addCode} onChange={e => { setAddCode(e.target.value); setAddName('') }} style={{ width: 120, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--heading)', padding: '4px 8px', fontSize: '0.72rem' }} />
           </div>
           <div className="field">
-            <label style={{ fontSize: '0.6rem', color: 'var(--muted)' }}>名称</label>
-            <input type="text" placeholder="名称" value={addName} onChange={e => setAddName(e.target.value)} style={{ width: 80, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--heading)', padding: '4px 8px', fontSize: '0.72rem' }} />
+            <label style={{ fontSize: '0.6rem', color: 'var(--muted)' }}>{nameLoading ? '搜索中...' : '名称'}</label>
+            <input type="text" placeholder="自动填充" value={addName} onChange={e => setAddName(e.target.value)} style={{ width: 80, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--heading)', padding: '4px 8px', fontSize: '0.72rem' }} />
           </div>
           <div className="field">
-            <label style={{ fontSize: '0.6rem', color: 'var(--muted)' }}>股数</label>
-            <input type="number" placeholder="100" value={addShares} onChange={e => setAddShares(e.target.value)} style={{ width: 60, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--heading)', padding: '4px 8px', fontSize: '0.72rem' }} />
+            <label style={{ fontSize: '0.6rem', color: 'var(--muted)' }}>股数{isAShare ? ' (100整倍)' : ''}</label>
+            <input type="number" placeholder="100" value={addShares} onChange={e => setAddShares(e.target.value)} style={{ width: 60, background: 'var(--bg)', border: sharesInvalid ? '1px solid var(--up)' : '1px solid var(--border)', borderRadius: 4, color: 'var(--heading)', padding: '4px 8px', fontSize: '0.72rem' }} />
           </div>
           <div className="field">
             <label style={{ fontSize: '0.6rem', color: 'var(--muted)' }}>成本价</label>
@@ -78,6 +118,7 @@ export default function HoldingsTable({ holdings, realtimePrices, onDelete, onSe
           <button onClick={handleAdd} disabled={submitting} style={{ padding: '5px 16px', borderRadius: 4, border: 'none', background: 'var(--accent)', color: '#000', fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer' }}>
             {submitting ? '...' : '添加'}
           </button>
+          {error && <span style={{ color: 'var(--up)', fontSize: '0.65rem', alignSelf: 'center' }}>{error}</span>}
         </div>
       )}
       <div style={{ overflowY: 'auto', flex: 1 }}>
@@ -97,7 +138,8 @@ export default function HoldingsTable({ holdings, realtimePrices, onDelete, onSe
           <tbody>
             {holdings.map(h => {
               const rt = realtimePrices[h.code]
-              const price = rt?.price ?? h.avg_cost
+              const hasRealtime = rt && rt.price > 0
+              const price = hasRealtime ? rt!.price : h.avg_cost
               const marketValue = h.shares * price
               const pnl = (price - h.avg_cost) * h.shares
               const pnlPct = h.avg_cost > 0 ? ((price - h.avg_cost) / h.avg_cost) * 100 : 0
@@ -111,7 +153,9 @@ export default function HoldingsTable({ holdings, realtimePrices, onDelete, onSe
                   </td>
                   <td className="r">{h.shares}</td>
                   <td className="r">{h.avg_cost.toFixed(2)}</td>
-                  <td className="r">{price.toFixed(2)}</td>
+                  <td className="r">
+                    {hasRealtime ? price.toFixed(2) : <span style={{ color: 'var(--muted)', fontSize: '0.7rem' }}>--</span>}
+                  </td>
                   <td className="r">¥{marketValue.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}</td>
                   <td className="c">
                     <span className="pct-bar">
@@ -120,8 +164,14 @@ export default function HoldingsTable({ holdings, realtimePrices, onDelete, onSe
                     {weight.toFixed(0)}%
                   </td>
                   <td className={`r ${isUp ? 'up' : 'down'}`}>
-                    {isUp ? '+' : ''}¥{Math.abs(pnl).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}
-                    <span className="muted small"> ({isUp ? '+' : ''}{pnlPct.toFixed(1)}%)</span>
+                    {hasRealtime ? (
+                      <>
+                        {isUp ? '+' : ''}¥{Math.abs(pnl).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}
+                        <span className="muted small"> ({isUp ? '+' : ''}{pnlPct.toFixed(1)}%)</span>
+                      </>
+                    ) : (
+                      <span style={{ color: 'var(--muted)', fontSize: '0.7rem' }}>--</span>
+                    )}
                   </td>
                   <td className="c">
                     <div className="row-actions">

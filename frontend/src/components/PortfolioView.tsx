@@ -1,6 +1,6 @@
 // frontend/src/components/PortfolioView.tsx
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { getHoldings, deleteHolding, createTransaction, getReport, generateReport } from '../api/portfolio'
+import { getHoldings, deleteHolding, createTransaction, getReport, generateReport, getHoldingsRealtime, stockLookup } from '../api/portfolio'
 import type { Holding, ReportDetail } from '../api/portfolio'
 import PortfolioDashboard from './PortfolioDashboard'
 import HoldingsTable from './HoldingsTable'
@@ -19,8 +19,20 @@ export default function PortfolioView() {
   const leftRef = useRef<HTMLDivElement>(null)
   const bodyRef = useRef<HTMLDivElement>(null)
 
-  // Realtime prices placeholder (in real app, would fetch from API)
-  const [realtimePrices] = useState<Record<string, { price: number; change_pct: number }>>({})
+  // Realtime prices fetched from backend
+  const [realtimePrices, setRealtimePrices] = useState<Record<string, { price: number; change_pct: number }>>({})
+
+  const loadRealtimePrices = useCallback(async () => {
+    if (holdings.length === 0) return
+    try {
+      const data = await getHoldingsRealtime()
+      setRealtimePrices(data.prices || {})
+    } catch {
+      // silently fail - holdings will show avg_cost as fallback
+    }
+  }, [holdings.length])
+
+  useEffect(() => { loadRealtimePrices() }, [loadRealtimePrices])
 
   const loadHoldings = useCallback(async () => {
     try {
@@ -47,7 +59,8 @@ export default function PortfolioView() {
   const onTransactionChange = useCallback(() => {
     setTxRefreshKey(k => k + 1)
     loadHoldings()
-  }, [loadHoldings])
+    loadRealtimePrices()
+  }, [loadHoldings, loadRealtimePrices])
 
   const handleDeleteHolding = async (id: number) => {
     await deleteHolding(id)

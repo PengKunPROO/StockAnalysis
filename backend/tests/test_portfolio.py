@@ -131,7 +131,7 @@ class TestTransactionModel:
     @pytest.mark.asyncio
     async def test_count_transactions(self, db_session):
         for i in range(5):
-            await queries.create_transaction(db_session, "sh.600519", "贵州茅台", "buy", 10, 1680.0, datetime(2026, 5, 1 + i, 9, 30))
+            await queries.create_transaction(db_session, "sh.600519", "贵州茅台", "buy", 100, 1680.0, datetime(2026, 5, 1 + i, 9, 30))
         count = await queries.count_transactions(db_session)
         assert count == 5
 
@@ -238,17 +238,17 @@ class TestTransactionAPI:
             "code": "sh.600519", "name": "贵州茅台",
             "shares": 100, "avg_cost": 1680.0, "buy_date": "2026-05-10"
         })
-        # Record a buy (加仓)
+        # Record a buy (加仓) - must be 100 multiples for A-share
         resp = client.post("/api/v1/portfolio/transactions", json={
             "code": "sh.600519", "name": "贵州茅台",
-            "action": "buy", "shares": 50, "price": 1750.0,
+            "action": "buy", "shares": 100, "price": 1750.0,
             "traded_at": "2026-06-01T09:30:00", "note": "加仓"
         })
         assert resp.status_code == 200
-        # Verify holding updated: shares=150, avg_cost = (100*1680+50*1750)/150 = 1703.33
+        # Verify holding updated: shares=200, avg_cost = (100*1680+100*1750)/200 = 1715.0
         holdings = client.get("/api/v1/portfolio/holdings").json()["holdings"]
-        assert holdings[0]["shares"] == 150
-        assert abs(float(holdings[0]["avg_cost"]) - 1703.3333) < 0.01
+        assert holdings[0]["shares"] == 200
+        assert abs(float(holdings[0]["avg_cost"]) - 1715.0) < 0.01
 
     def test_create_sell_transaction(self, client):
         client.post("/api/v1/portfolio/holdings", json={
@@ -269,7 +269,7 @@ class TestTransactionAPI:
         for i in range(15):
             client.post("/api/v1/portfolio/transactions", json={
                 "code": "sh.600519", "name": "贵州茅台",
-                "action": "buy", "shares": 10, "price": 1680.0 + i,
+                "action": "buy", "shares": 100, "price": 1680.0 + i,
                 "traded_at": f"2026-05-{1+i:02d}T09:30:00"
             })
         resp = client.get("/api/v1/portfolio/transactions?page=1&limit=10")
@@ -282,7 +282,7 @@ class TestTransactionAPI:
     def test_delete_transaction(self, client):
         create = client.post("/api/v1/portfolio/transactions", json={
             "code": "sh.600519", "name": "贵州茅台",
-            "action": "buy", "shares": 10, "price": 1680.0,
+            "action": "buy", "shares": 100, "price": 1680.0,
             "traded_at": "2026-05-10T09:30:00"
         })
         tx_id = create.json()["id"]
@@ -522,3 +522,108 @@ class TestReportAPI:
         assert resp.status_code == 200
         data = resp.json()
         assert "report_id" in data or "status" in data
+
+
+class TestSharesValidation:
+    """A-share shares must be multiples of 100 (1 lot = 100 shares)."""
+
+    def test_create_holding_a_share_not_100_multiple(self, client):
+        """A-share holding with shares=50 should be rejected."""
+        resp = client.post("/api/v1/portfolio/holdings", json={
+            "code": "sh.600519", "name": "贵州茅台",
+            "shares": 50, "avg_cost": 1680.0, "buy_date": "2026-05-10"
+        })
+        assert resp.status_code == 422
+        assert "100" in resp.json()["detail"]
+
+    def test_create_holding_a_share_100_multiple_ok(self, client):
+        """A-share holding with shares=200 should succeed."""
+        resp = client.post("/api/v1/portfolio/holdings", json={
+            "code": "sh.600519", "name": "贵州茅台",
+            "shares": 200, "avg_cost": 1680.0, "buy_date": "2026-05-10"
+        })
+        assert resp.status_code == 200
+        assert resp.json()["shares"] == 200
+
+    def test_create_holding_us_share_not_100_multiple_ok(self, client):
+        """US stock holding with shares=10 should succeed (no 100-lot rule)."""
+        resp = client.post("/api/v1/portfolio/holdings", json={
+            "code": "us.AAPL", "name": "Apple",
+            "shares": 10, "avg_cost": 180.0, "buy_date": "2026-05-10"
+        })
+        assert resp.status_code == 200
+        assert resp.json()["shares"] == 10
+
+    def test_create_buy_transaction_not_100_multiple(self, client):
+        """A-share buy transaction with shares=50 should be rejected."""
+        resp = client.post("/api/v1/portfolio/transactions", json={
+            "code": "sh.600519", "name": "贵州茅台",
+            "action": "buy", "shares": 50, "price": 1680.0,
+            "traded_at": "2026-05-10T09:30:00"
+        })
+        assert resp.status_code == 422
+        assert "100" in resp.json()["detail"]
+
+    def test_create_sell_transaction_not_100_multiple_ok(self, client):
+        """A-share sell with shares=50 should succeed (sell can be any amount)."""
+        # Create holding first
+        client.post("/api/v1/portfolio/holdings", json={
+            "code": "sh.600519", "name": "贵州茅台",
+            "shares": 100, "avg_cost": 1680.0, "buy_date": "2026-05-10"
+        })
+        resp = client.post("/api/v1/portfolio/transactions", json={
+            "code": "sh.600519", "name": "贵州茅台",
+            "action": "sell", "shares": 50, "price": 1850.0,
+            "traded_at": "2026-07-01T14:30:00"
+        })
+        assert resp.status_code == 200
+
+
+class TestStockLookup:
+    """Stock lookup API for auto-filling stock name."""
+
+    def test_stock_lookup_returns_results(self, client):
+        """Stock lookup should return results with code+name."""
+        with patch("app.engine.data_engine.engine.search", new_callable=AsyncMock) as mock_search:
+            mock_search.return_value = (
+                [{"code": "sh.600519", "name": "贵州茅台", "market": "a_share"}],
+                None
+            )
+            resp = client.get("/api/v1/portfolio/stock-lookup?q=600519")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["results"]) == 1
+        assert data["results"][0]["code"] == "sh.600519"
+        assert data["results"][0]["name"] == "贵州茅台"
+
+    def test_stock_lookup_empty_query(self, client):
+        """Empty query should return 422 (min_length=1)."""
+        resp = client.get("/api/v1/portfolio/stock-lookup?q=")
+        assert resp.status_code == 422
+
+
+class TestHoldingsRealtime:
+    """Batch realtime prices endpoint."""
+
+    def test_holdings_realtime_empty(self, client):
+        """No holdings = empty prices dict."""
+        resp = client.get("/api/v1/portfolio/holdings/realtime")
+        assert resp.status_code == 200
+        assert resp.json()["prices"] == {}
+
+    def test_holdings_realtime_with_data(self, client):
+        """Should fetch realtime prices for all open holdings."""
+        client.post("/api/v1/portfolio/holdings", json={
+            "code": "sh.600519", "name": "贵州茅台",
+            "shares": 100, "avg_cost": 1680.0, "buy_date": "2026-05-10"
+        })
+        with patch("app.engine.data_engine.engine.get_realtime", new_callable=AsyncMock) as mock_rt:
+            mock_rt.return_value = (
+                {"code": "sh.600519", "name": "贵州茅台", "price": 1750.0, "change_pct": 1.5},
+                None
+            )
+            resp = client.get("/api/v1/portfolio/holdings/realtime")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "sh.600519" in data["prices"]
+        assert data["prices"]["sh.600519"]["price"] == 1750.0

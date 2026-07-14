@@ -22,6 +22,11 @@ def _normalize_code(code: str) -> str:
     return f"sz.{digits}"
 
 
+def _is_a_share(code: str) -> bool:
+    """Check if code is an A-share (sh./sz. prefix)."""
+    return code.startswith(("sh.", "sz."))
+
+
 # === Request Models ===
 
 class HoldingCreate(BaseModel):
@@ -40,6 +45,47 @@ class TransactionCreate(BaseModel):
     price: float = Field(gt=0)
     traded_at: datetime
     note: str | None = None
+
+
+# === Stock Lookup (auto-fill name) ===
+
+@router.get("/stock-lookup")
+async def stock_lookup(q: str = Query(..., min_length=1, description="股票代码或名称关键词")):
+    """Search stock by code/name, return matches with code+name for auto-fill."""
+    from app.engine.data_engine import engine
+    results, warning = await engine.search(q)
+    # Return compact format for frontend auto-fill
+    matches = [
+        {"code": r["code"], "name": r["name"], "market": r["market"]}
+        for r in results[:10]
+    ]
+    return {"results": matches, "warning": warning}
+
+
+# === Holdings Realtime Prices ===
+
+@router.get("/holdings/realtime")
+async def get_holdings_realtime():
+    """Batch fetch realtime prices for all open holdings."""
+    from app.engine.data_engine import engine
+    factory = get_session_factory()
+    async with factory() as session:
+        holdings = await queries.get_holdings(session, only_open=True)
+    prices = {}
+    errors = []
+    for h in holdings:
+        try:
+            data, warning = await engine.get_realtime(h.code)
+            if data and data.get("price"):
+                prices[h.code] = {
+                    "price": data["price"],
+                    "change_pct": data.get("change_pct", 0),
+                }
+            elif warning:
+                errors.append({"code": h.code, "error": warning})
+        except Exception as e:
+            errors.append({"code": h.code, "error": str(e)})
+    return {"prices": prices, "errors": errors if errors else None}
 
 
 # === Holdings ===
@@ -62,8 +108,14 @@ async def get_holdings():
 
 @router.post("/holdings")
 async def create_holding(item: HoldingCreate):
-    factory = get_session_factory()
     code = _normalize_code(item.code)
+    # A-share shares must be multiples of 100 (1 lot = 100 shares)
+    if _is_a_share(code) and item.shares % 100 != 0:
+        raise HTTPException(
+            status_code=422,
+            detail="A股买入股数必须为100的整数倍（1手=100股）"
+        )
+    factory = get_session_factory()
     async with factory() as session:
         holding = await queries.create_holding(
             session, code, item.name,
@@ -135,8 +187,14 @@ async def get_transactions(
 
 @router.post("/transactions")
 async def create_transaction(item: TransactionCreate):
-    factory = get_session_factory()
     code = _normalize_code(item.code)
+    # A-share buy must be multiples of 100; sell can be any amount (including 0 for cleanup)
+    if _is_a_share(code) and item.action == "buy" and item.shares % 100 != 0:
+        raise HTTPException(
+            status_code=422,
+            detail="A股买入股数必须为100的整数倍（1手=100股）"
+        )
+    factory = get_session_factory()
     async with factory() as session:
         tx = await queries.create_transaction(
             session, code, item.name, item.action,

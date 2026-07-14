@@ -64,6 +64,21 @@ export async function deleteHolding(id: number): Promise<void> {
   await fetch(`${BASE}/holdings/${id}`, { method: 'DELETE' })
 }
 
+export async function getHoldingsRealtime(): Promise<{
+  prices: Record<string, { price: number; change_pct: number }>
+  errors: Array<{ code: string; error: string }> | null
+}> {
+  const r = await fetch(`${BASE}/holdings/realtime`)
+  return r.json()
+}
+
+export async function stockLookup(q: string): Promise<{
+  results: Array<{ code: string; name: string; market: string }>
+}> {
+  const r = await fetch(`${BASE}/stock-lookup?q=${encodeURIComponent(q)}`)
+  return r.json()
+}
+
 export async function getTransactions(
   page = 1, limit = 20, code = ''
 ): Promise<{ transactions: Transaction[]; total: number; page: number; total_pages: number }> {
