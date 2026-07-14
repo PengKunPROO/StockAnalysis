@@ -10,6 +10,18 @@ from app.db.models import Holding, Transaction
 router = APIRouter(prefix="/portfolio", tags=["portfolio"])
 
 
+def _normalize_code(code: str) -> str:
+    """Ensure stock code has sh./sz. prefix."""
+    code = code.strip()
+    if code.startswith(("sh.", "sz.", "us.")):
+        return code
+    # Auto-detect: 6xxxxx -> sh, 0xxxxx/3xxxxx -> sz, else default sz
+    digits = code.replace(".", "")
+    if digits.startswith("6"):
+        return f"sh.{digits}"
+    return f"sz.{digits}"
+
+
 # === Request Models ===
 
 class HoldingCreate(BaseModel):
@@ -51,9 +63,10 @@ async def get_holdings():
 @router.post("/holdings")
 async def create_holding(item: HoldingCreate):
     factory = get_session_factory()
+    code = _normalize_code(item.code)
     async with factory() as session:
         holding = await queries.create_holding(
-            session, item.code, item.name,
+            session, code, item.name,
             item.shares, item.avg_cost, item.buy_date
         )
         return {
@@ -123,13 +136,14 @@ async def get_transactions(
 @router.post("/transactions")
 async def create_transaction(item: TransactionCreate):
     factory = get_session_factory()
+    code = _normalize_code(item.code)
     async with factory() as session:
         tx = await queries.create_transaction(
-            session, item.code, item.name, item.action,
+            session, code, item.name, item.action,
             item.shares, item.price, item.traded_at, item.note
         )
         # Auto-update holding
-        holding = await queries.get_holding_by_code(session, item.code)
+        holding = await queries.get_holding_by_code(session, code)
         if item.action == "buy":
             if holding:
                 # 加仓: 重算 avg_cost
@@ -142,7 +156,7 @@ async def create_transaction(item: TransactionCreate):
             else:
                 # 新建持仓
                 await queries.create_holding(
-                    session, item.code, item.name,
+                    session, code, item.name,
                     item.shares, item.price, item.traded_at.date()
                 )
         elif item.action == "sell":

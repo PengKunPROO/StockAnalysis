@@ -45,12 +45,18 @@ async def generate_report(report_date: date) -> dict:
     # Fetch realtime prices for all holdings
     realtime_prices = {}
     for h in holdings:
+        code = h["code"]
+        # Normalize code format for DataEngine
+        if not code.startswith(("sh.", "sz.", "us.")):
+            digits = code.replace(".", "")
+            code = f"sh.{digits}" if digits.startswith("6") else f"sz.{digits}"
+            h["code"] = code  # fix in-place
         try:
-            rt, _ = await data_engine.get_realtime(h["code"])
+            rt, _ = await data_engine.get_realtime(code)
             if rt:
-                realtime_prices[h["code"]] = {"price": rt.get("price", h["avg_cost"]), "change_pct": rt.get("change_pct", 0)}
+                realtime_prices[code] = {"price": rt.get("price", h["avg_cost"]), "change_pct": rt.get("change_pct", 0)}
         except Exception:
-            realtime_prices[h["code"]] = {"price": h["avg_cost"], "change_pct": 0}
+            realtime_prices[code] = {"price": h["avg_cost"], "change_pct": 0}
 
     # Get previous report's contexts (cross-day memory)
     prev_report_date = report_date - timedelta(days=1)
