@@ -187,8 +187,7 @@ def matches_snapshot(stock: dict, values: dict) -> bool:
             continue
         raw = stock.get(name)
         if raw is None:
-            if val.get("min") is not None or val.get("max") is not None:
-                return False
+            # Skip filter when data is unavailable (non-trading hours)
             continue
         scale = field.constraints.get("scale", 1)
         v = raw * scale
