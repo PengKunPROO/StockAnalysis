@@ -64,8 +64,13 @@ export default function PortfolioView() {
     code: string; name: string; action: 'buy' | 'sell';
     shares: number; price: number; traded_at: string; note?: string;
   }) => {
-    await createTransaction(data)
-    onTransactionChange()
+    try {
+      await createTransaction(data)
+      onTransactionChange()
+    } catch (e) {
+      console.error('Transaction submit failed:', e)
+      throw e
+    }
   }
 
   const handleGenerate = async () => {

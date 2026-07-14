@@ -20,8 +20,14 @@ export default function TransactionForm({ onSubmit, prefillCode, prefillName }: 
   const [note, setNote] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
+  const [error, setError] = useState('')
+
   const handleSubmit = async () => {
-    if (!code || !shares || !price) return
+    if (!code || !shares || !price) {
+      setError('请填写代码、股数和价格')
+      return
+    }
+    setError('')
     setSubmitting(true)
     try {
       await onSubmit({
@@ -35,6 +41,8 @@ export default function TransactionForm({ onSubmit, prefillCode, prefillName }: 
       setShares('')
       setPrice('')
       setNote('')
+    } catch (e: any) {
+      setError(e.message || '提交失败')
     } finally {
       setSubmitting(false)
     }
@@ -87,6 +95,7 @@ export default function TransactionForm({ onSubmit, prefillCode, prefillName }: 
         <button className="submit-btn" onClick={handleSubmit} disabled={submitting}>
           {submitting ? '提交中...' : '提交'}
         </button>
+        {error && <span style={{ color: 'var(--up)', fontSize: '0.65rem' }}>{error}</span>}
       </div>
     </div>
   )
