@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>AI Diagnosis Chat Redesign</title>
+<style>
+:root {
+  --bg: #0b1120; --surface: #111d31; --surface2: #1a2744;
+  --border: #1e3050; --border-light: rgba(30, 48, 80, 0.5);
+  --text: #94a3b8; --heading: #e2e8f0; --muted: #475569;
+  --accent: #06d6a0; --accent-glow: rgba(6, 214, 160, 0.15);
+  --up: #ef4444; --down: #22c55e; --gold: #f59e0b;
+  --user-msg: #1e3a5f; --ai-msg: #111d31;
+  --font: "Inter", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", "Consolas", monospace;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: var(--bg); color: var(--text); font-family: var(--font); height: 100vh; display: flex; justify-content: center; }
+.prototype-wrap { width: 100%; max-width: 900px; height: 100vh; display: flex; flex-direction: column; border-left: 1px solid var(--border); border-right: 1px solid var(--border); }
+
+/* === Chat Header === */
+.chat-header { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0; }
+.chat-header .title { font-size: 0.95rem; font-weight: 700; color: var(--heading); }
+.chat-header .spacer { flex: 1; }
+
+/* === Skill Toggle === */
+.skill-toggle-wrap { display: flex; align-items: center; gap: 0; position: relative; }
+.skill-chip { display: flex; align-items: center; gap: 8px; padding: 5px 12px; border-radius: 20px; border: 1px solid var(--border); background: var(--surface2); cursor: pointer; transition: .2s; user-select: none; }
+.skill-chip:hover { border-color: var(--accent); background: var(--accent-glow); }
+.skill-chip.active { border-color: var(--accent); background: var(--accent-glow); }
+.skill-chip-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); transition: .2s; flex-shrink: 0; }
+.skill-chip.active .skill-chip-dot { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+.skill-chip-name { font-size: 0.72rem; color: var(--heading); max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.skill-chip.active .skill-chip-name { color: var(--accent); }
+.skill-chip-name.unset { color: var(--muted); font-style: italic; }
+.skill-chip-caret { font-size: 0.6rem; color: var(--muted); margin-left: 2px; transition: .2s; }
+.skill-chip:hover .skill-chip-caret { color: var(--accent); }
+
+.icon-btn { padding: 5px 8px; border-radius: 6px; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; font-size: 0.8rem; }
+.icon-btn:hover { color: var(--accent); border-color: var(--accent); }
+
+/* === Chat Messages === */
+.chat-messages { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.chat-empty { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 0.9rem; flex-direction: column; gap: 8px; }
+.chat-empty .emoji { font-size: 2rem; }
+
+/* Message Bubbles - WeChat style */
+.msg { max-width: 80%; padding: 10px 14px; border-radius: 12px; font-size: 0.85rem; line-height: 1.65; word-break: break-word; animation: fadeIn .2s; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+/* User message - right aligned, blue */
+.msg.user { align-self: flex-end; background: var(--user-msg); color: var(--heading); border-bottom-right-radius: 4px; }
+
+/* AI message - left aligned, surface color */
+.msg.ai { align-self: flex-start; background: var(--ai-msg); border: 1px solid var(--border); color: var(--text); border-bottom-left-radius: 4px; max-width: 92%; }
+.msg.ai .role { font-size: 0.6rem; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+
+/* System message - centered, muted */
+.msg-system { text-align: center; padding: 4px 0; font-size: 0.65rem; color: var(--muted); }
+
+/* AI markdown content */
+.msg.ai h2 { font-size: 0.95rem; color: var(--heading); margin: 8px 0 4px; border-bottom: 1px solid var(--border-light); padding-bottom: 4px; }
+.msg.ai h3 { font-size: 0.85rem; color: var(--heading); margin: 6px 0 3px; }
+.msg.ai p { margin: 3px 0; }
+.msg.ai ul, .msg.ai ol { padding-left: 18px; margin: 4px 0; }
+.msg.ai li { margin: 2px 0; }
+.msg.ai strong { color: var(--heading); }
+.msg.ai em { color: var(--accent); font-style: normal; }
+.msg.ai code { background: var(--surface2); padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-family: var(--font-mono); }
+.msg.ai table { width: 100%; border-collapse: collapse; margin: 6px 0; font-size: 0.75rem; }
+.msg.ai th { background: var(--surface2); color: var(--heading); padding: 5px 8px; border: 1px solid var(--border); text-align: left; }
+.msg.ai td { padding: 4px 8px; border: 1px solid var(--border); }
+
+/* === Status Bar === */
+.chat-status { padding: 6px 14px; font-size: 0.7rem; color: var(--muted); background: var(--surface2); border-top: 1px solid var(--border); display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.chat-status .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: pulse 1.5s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+/* === Chat Input === */
+.chat-input { padding: 10px 14px; border-top: 1px solid var(--border); display: flex; gap: 8px; flex-shrink: 0; background: var(--surface); }
+.chat-input textarea { flex: 1; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface2); color: var(--heading); font-size: 0.85rem; resize: none; outline: none; min-height: 36px; max-height: 120px; font-family: var(--font); transition: border-color .2s; }
+.chat-input textarea:focus { border-color: var(--accent); }
+.chat-input button { padding: 6px 16px; border-radius: 8px; border: none; background: var(--accent); color: #000; font-weight: 600; font-size: 0.85rem; cursor: pointer; white-space: nowrap; }
+.chat-input button:hover { filter: brightness(1.1); }
+.chat-input button:disabled { opacity: .4; cursor: default; }
+
+/* === Skill Dropdown === */
+.skill-dropdown { position: absolute; top: calc(100% + 6px); right: 0; width: 320px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; z-index: 300; box-shadow: 0 12px 32px rgba(0,0,0,.5), 0 0 0 1px rgba(6,214,160,.05); overflow: hidden; display: none; animation: dropdownIn .15s; }
+@keyframes dropdownIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+.skill-dropdown.open { display: block; }
+.skill-search-wrap { padding: 10px 12px; border-bottom: 1px solid var(--border); position: relative; }
+.skill-search { width: 100%; padding: 7px 12px 7px 30px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface2); color: var(--heading); font-size: 0.78rem; outline: none; transition: .2s; }
+.skill-search:focus { border-color: var(--accent); }
+.skill-search-icon { position: absolute; left: 22px; top: 50%; transform: translateY(-50%); font-size: 0.7rem; color: var(--muted); pointer-events: none; }
+.skill-list { max-height: 260px; overflow-y: auto; padding: 4px 0; }
+.skill-list::-webkit-scrollbar { width: 4px; }
+.skill-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+.skill-opt { padding: 8px 14px; cursor: pointer; transition: .1s; border-left: 3px solid transparent; }
+.skill-opt:hover { background: var(--accent-glow); }
+.skill-opt.sel { background: var(--accent-glow); border-left-color: var(--accent); }
+.skill-opt .sn { font-size: 0.78rem; color: var(--heading); font-weight: 600; }
+.skill-opt .sd { font-size: 0.65rem; color: var(--muted); margin-top: 3px; line-height: 1.4; }
+.skill-opt .stag { font-size: 0.58rem; padding: 2px 6px; border-radius: 4px; margin-left: 6px; vertical-align: middle; }
+.skill-opt .stag.hermes { background: var(--accent-glow); color: var(--accent); }
+.skill-opt .stag.uploaded { background: rgba(245,158,11,.12); color: var(--gold); }
+</style>
+</head>
+<body>
+<div class="prototype-wrap">
+  <!-- Header: title + skill toggle + settings -->
+  <div class="chat-header">
+    <span class="title">🧠 AI 诊断分析</span>
+    <span class="spacer"></span>
+    <div class="skill-toggle-wrap">
+      <div class="skill-chip active" onclick="this.classList.toggle('active')">
+        <div class="skill-chip-dot"></div>
+        <span class="skill-chip-name" onclick="event.stopPropagation(); document.querySelector('.skill-dropdown').classList.toggle('open')">hermesstockagent-workflow</span>
+        <span class="skill-chip-caret" onclick="event.stopPropagation(); document.querySelector('.skill-dropdown').classList.toggle('open')">▼</span>
+      </div>
+      <div class="skill-dropdown">
+        <div class="skill-search-wrap">
+          <span class="skill-search-icon">🔍</span>
+          <input class="skill-search" placeholder="搜索 Skill..." />
+        </div>
+        <div class="skill-list">
+          <div class="skill-opt sel"><span class="sn">hermesstockagent-workflow</span><span class="stag hermes">本地</span><div class="sd">项目工作流 skill</div></div>
+          <div class="skill-opt"><span class="sn">stock-analysis</span><span class="stag uploaded">上传</span><div class="sd">A股基本面和技术面综合分析</div></div>
+          <div class="skill-opt"><span class="sn">financial-statement-analyzer</span><span class="stag hermes">本地</span><div class="sd">财务报表深度分析</div></div>
+        </div>
+      </div>
+    </div>
+    <button class="icon-btn" title="管理 Skill">⚙</button>
+  </div>
+
+  <!-- Messages -->
+  <div class="chat-messages" id="messages">
+    <!-- System message -->
+    <div class="msg-system">已切换至 兆易创新 (sh.603986)</div>
+
+    <!-- User message -->
+    <div class="msg user">分析一下兆易创新的技术面和基本面</div>
+
+    <!-- AI response (only analysis content, no skill echo) -->
+    <div class="msg ai">
+      <div class="role">AI 分析</div>
+      <h2>兆易创新 (sh.603986) 综合分析</h2>
+      <h3>📊 实时行情</h3>
+      <table>
+        <tr><th>指标</th><th>数值</th></tr>
+        <tr><td>最新价</td><td>571.79 元</td></tr>
+        <tr><td>涨跌幅</td><td>-2.09%</td></tr>
+        <tr><td>成交量</td><td>5537万</td></tr>
+      </table>
+      <h3>📈 技术面</h3>
+      <ul>
+        <li><strong>MACD:</strong> -54.82，空头排列</li>
+        <li><strong>RSI(14):</strong> 超卖区域</li>
+        <li><strong>布林带:</strong> 价格接近下轨</li>
+      </ul>
+      <h3>💰 基本面</h3>
+      <ul>
+        <li><strong>ROE:</strong> 6.1%</li>
+        <li><strong>负债率:</strong> 8.1%</li>
+      </ul>
+      <p><em>综合判断：短期技术面偏弱，但基本面稳健，可关注超跌反弹机会。</em></p>
+    </div>
+
+    <!-- Follow-up user message (skill toggle OFF) -->
+    <div class="msg user">RSI 超卖具体是多少？</div>
+
+    <!-- AI follow-up (no skill content, direct answer) -->
+    <div class="msg ai">
+      <div class="role">AI 分析</div>
+      <p>RSI(14) 当前值为 <strong>28.3</strong>，低于 30 的超卖阈值。</p>
+      <p>历史上当 RSI 低于 30 时，兆易创新在后续 5 个交易日内平均反弹 <strong>3.2%</strong>。</p>
+    </div>
+  </div>
+
+  <!-- Status bar -->
+  <div class="chat-status" style="display: none;">
+    <span class="dot"></span> Agent 启动中...
+  </div>
+
+  <!-- Input -->
+  <div class="chat-input">
+    <textarea placeholder="输入分析问题..." rows="1"></textarea>
+    <button>发送</button>
+  </div>
+</div>
+
+<script>
+// Auto-resize textarea
+document.querySelector('textarea').addEventListener('input', function() {
+  this.style.height = 'auto';
+  this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+});
+// Enter to send
+document.querySelector('textarea').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); }
+});
+// Close dropdown on outside click
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.skill-toggle-wrap')) {
+    document.querySelector('.skill-dropdown').classList.remove('open');
+  }
+});
+</script>
+</body>
+</html>
