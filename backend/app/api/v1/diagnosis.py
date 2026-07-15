@@ -174,6 +174,7 @@ router = APIRouter(prefix="/diagnosis", tags=["diagnosis"])
 class ChatRequest(BaseModel):
     session_id: str | None = None
     skill: str = "stock-analysis"
+    use_skill: bool = True
     message: str
     stock_codes: list[dict] | None = None
 
@@ -189,7 +190,9 @@ async def chat(req: ChatRequest):
     stocks = await get_session_stocks(sid)
 
     stock_list = ", ".join(f"{s['name']}({s['code']})" for s in stocks)
-    skill_content = _resolve_skill_content(req.skill)
+    skill_content = ""
+    if req.use_skill and req.skill:
+        skill_content = _resolve_skill_content(req.skill)
 
     # Pre-fetch recent news context for analysis
     news_context = ""
@@ -231,8 +234,8 @@ async def chat(req: ChatRequest):
 """
 
     async def event_stream():
-        yield f'data: {json.dumps({"session_id": sid}, ensure_ascii=False)}\n\n'
-        yield f'data: {json.dumps({"status": "agent_starting"}, ensure_ascii=False)}\n\n'
+        yield f'data: {json.dumps({"type":"session","session_id": sid}, ensure_ascii=False)}\n\n'
+        yield f'data: {json.dumps({"type":"status","status":"agent_starting"}, ensure_ascii=False)}\n\n'
 
         queue = asyncio.Queue()
         loop = asyncio.get_event_loop()
@@ -241,13 +244,10 @@ async def chat(req: ChatRequest):
         loop.run_in_executor(executor, _read_subprocess, prompt, queue, ready_event)
 
         full_output = ""
-        line_count = 0
         returncode = 0
         stderr_text = ""
 
         while True:
-            # Use a timeout so we can send keepalive comments during long
-            # silences (hermes can take 60-120s curling APIs before any output).
             try:
                 item = await asyncio.wait_for(queue.get(), timeout=15.0)
             except asyncio.TimeoutError:
@@ -257,22 +257,24 @@ async def chat(req: ChatRequest):
             if item is None:
                 break
             if isinstance(item, Exception):
-                yield f"data: {json.dumps({'content': f'Error: {item}', 'done': True}, ensure_ascii=False)}\n\n"
+                yield f'data: {json.dumps({"type":"error","content": f"Error: {item}"}, ensure_ascii=False)}\n\n'
+                yield f'data: {json.dumps({"type":"done"}, ensure_ascii=False)}\n\n'
                 executor.shutdown(wait=False)
                 return
 
             line = item if isinstance(item, str) else str(item)
-            line_count += 1
+            event_type, content = _classify_line(line)
 
-            # No more ANALYSIS_START gate - hermes v0.17+ doesn't use the ╭─ banner.
-            # Just filter skip patterns and output everything else.
-            filtered = _filter_line(line)
-            if filtered is not None:
-                full_output += filtered + "\n"
-                if "curl" in filtered:
-                    yield f'data: {json.dumps({"status": "fetching_data"}, ensure_ascii=False)}\n\n'
-                chunk = filtered + "\n"
-                yield f"data: {json.dumps({'content': chunk}, ensure_ascii=False)}\n\n"
+            if event_type == "skip":
+                continue
+            elif event_type == "log":
+                if "curl" in content:
+                    yield f'data: {json.dumps({"type":"status","status":"fetching_data"}, ensure_ascii=False)}\n\n'
+                yield f'data: {json.dumps({"type":"log","content": content}, ensure_ascii=False)}\n\n'
+            elif event_type == "analysis":
+                full_output += content + "\n"
+                chunk = content + "\n"
+                yield f'data: {json.dumps({"type":"analysis","content": chunk}, ensure_ascii=False)}\n\n'
 
         # Read final signals
         try:
@@ -286,12 +288,13 @@ async def chat(req: ChatRequest):
 
         if returncode != 0:
             err = stderr_text or f"Hermes exited with code {returncode}"
-            yield f"data: {json.dumps({'content': f'Agent Error: {err}', 'done': True}, ensure_ascii=False)}\n\n"
+            yield f'data: {json.dumps({"type":"error","content": f"Agent Error: {err}"}, ensure_ascii=False)}\n\n'
+            yield f'data: {json.dumps({"type":"done"}, ensure_ascii=False)}\n\n'
             return
 
         await save_message(sid, "user", content=req.message)
         await save_message(sid, "assistant", content=full_output.strip())
-        yield f"data: {json.dumps({'done': True}, ensure_ascii=False)}\n\n"
+        yield f'data: {json.dumps({"type":"done"}, ensure_ascii=False)}\n\n'
 
     return StreamingResponse(
         event_stream(),
