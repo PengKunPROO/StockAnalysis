@@ -272,6 +272,27 @@ a:hover { text-decoration: underline; }
 .skill-opt .stag.hermes { background: var(--accent-glow); color: var(--accent); }
 .skill-opt .stag.uploaded { background: var(--gold-bg); color: var(--gold); }
 
+/* === Skill Chip (toggle + dropdown) === */
+.skill-chip { display: flex; align-items: center; gap: 8px; padding: 5px 12px; border-radius: 20px; border: 1px solid var(--border); background: var(--surface2); cursor: pointer; transition: .2s; user-select: none; }
+.skill-chip:hover { border-color: var(--accent); background: var(--accent-glow); }
+.skill-chip.active { border-color: var(--accent); background: var(--accent-glow); }
+.skill-chip-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); transition: .2s; flex-shrink: 0; }
+.skill-chip.active .skill-chip-dot { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+.skill-chip-name { font-size: 0.72rem; color: var(--heading); max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.skill-chip.active .skill-chip-name { color: var(--accent); }
+.skill-chip-name.unset { color: var(--muted); font-style: italic; }
+.skill-chip-caret { font-size: 0.6rem; color: var(--muted); margin-left: 2px; transition: .2s; }
+.skill-chip:hover .skill-chip-caret { color: var(--accent); }
+
+/* Skill dropdown refined */
+.skill-dropdown { position: absolute; top: calc(100% + 6px); right: 0; width: 320px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; z-index: 300; box-shadow: 0 12px 32px rgba(0,0,0,.5); overflow: hidden; display: none; animation: dropdownIn .15s; }
+@keyframes dropdownIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+.skill-dropdown.open { display: block; }
+.skill-search-wrap { padding: 10px 12px; border-bottom: 1px solid var(--border); position: relative; }
+.skill-search { width: 100%; padding: 7px 12px 7px 30px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface2); color: var(--heading); font-size: 0.78rem; outline: none; transition: .2s; }
+.skill-search:focus { border-color: var(--accent); }
+.skill-search-icon { position: absolute; left: 22px; top: 50%; transform: translateY(-50%); font-size: 0.7rem; color: var(--muted); pointer-events: none; }
+
 /* === Animations === */
 @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 .msg { animation: fadeIn .3s ease; }

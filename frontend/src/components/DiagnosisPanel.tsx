@@ -44,13 +44,18 @@ function MsgBubble({ msg }: { msg: ChatMsg }) {
   }
   return (
     <div className={`msg ${isUser ? 'user' : 'ai'}`}>
-      <div className="role">{isUser ? '你' : 'AI 分析'}</div>
       {isUser ? <div className="msg-body msg-user-text">{msg.content}</div> : <MemoMarkdown content={msg.content} />}
     </div>
   )
 }
 
-function SkillPicker({ skills, value, onChange }: { skills: SkillMeta[]; value: string; onChange: (name: string) => void }) {
+function SkillChip({ skills, skill, useSkill, onToggle, onPick }: {
+  skills: SkillMeta[]
+  skill: string
+  useSkill: boolean
+  onToggle: () => void
+  onPick: (name: string) => void
+}) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const ref = useRef<HTMLDivElement>(null)
@@ -65,21 +70,37 @@ function SkillPicker({ skills, value, onChange }: { skills: SkillMeta[]; value: 
     ? skills.filter(s => s.name.toLowerCase().includes(query.toLowerCase()) || s.description?.toLowerCase().includes(query.toLowerCase()))
     : skills
 
-  const current = skills.find(s => s.name === value)
+  const current = skills.find(s => s.name === skill)
   const tag = current?.source?.startsWith('hermes') ? '📦' : current?.source === 'uploaded' ? '📤' : ''
 
   return (
-    <div ref={ref} style={{ position: 'relative', marginLeft: 'auto' }}>
-      <button className="skill-trigger" onClick={() => { setOpen(!open); setTimeout(() => inputRef.current?.focus(), 50) }}>
-        {tag} {value || '选择 Skill'}
-      </button>
+    <div ref={ref} style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+      <div
+        className={`skill-chip ${useSkill ? 'active' : ''}`}
+        onClick={(e) => { e.stopPropagation(); onToggle() }}
+      >
+        <div className="skill-chip-dot" />
+        <span
+          className={`skill-chip-name ${!skill ? 'unset' : ''}`}
+          onClick={(e) => { e.stopPropagation(); setOpen(!open); setTimeout(() => inputRef.current?.focus(), 50) }}
+        >
+          {tag} {skill || '选择 Skill'}
+        </span>
+        <span
+          className="skill-chip-caret"
+          onClick={(e) => { e.stopPropagation(); setOpen(!open); setTimeout(() => inputRef.current?.focus(), 50) }}
+        >▼</span>
+      </div>
       {open && (
-        <div className="skill-dropdown">
-          <input ref={inputRef} className="skill-search" value={query} onChange={e => setQuery(e.target.value)}
-            placeholder="搜索 Skill 名称..." onKeyDown={e => { if (e.key === 'Escape') setOpen(false) }} />
+        <div className="skill-dropdown open">
+          <div className="skill-search-wrap">
+            <span className="skill-search-icon">🔍</span>
+            <input ref={inputRef} className="skill-search" value={query} onChange={e => setQuery(e.target.value)}
+              placeholder="搜索 Skill..." onKeyDown={e => { if (e.key === 'Escape') setOpen(false) }} />
+          </div>
           <div className="skill-list">
             {filtered.map(s => (
-              <div key={s.name} className={`skill-opt ${s.name === value ? 'sel' : ''}`} onClick={() => { onChange(s.name); setOpen(false); setQuery('') }}>
+              <div key={s.name} className={`skill-opt ${s.name === skill ? 'sel' : ''}`} onClick={() => { onPick(s.name); setOpen(false); setQuery('') }}>
                 <div>
                   <span className="sn">{s.name}</span>
                   {s.source?.startsWith('hermes') ? <span className="stag hermes">本地</span> : s.source === 'uploaded' ? <span className="stag uploaded">上传</span> : null}
@@ -105,6 +126,7 @@ export default function DiagnosisPanel({ onManageSkills }: Props) {
   const [stream, setStream] = useState('')
   const [sid, setSid] = useState<string | null>(null)
   const [skill, setSkill] = useState(state.skills[0]?.name || '')
+  const [useSkill, setUseSkill] = useState(true)
   const [status, setStatus] = useState('')
   const bottomRef = useRef<HTMLDivElement>(null)
   const prevStockRef = useRef<string | null>(null)
@@ -114,12 +136,11 @@ export default function DiagnosisPanel({ onManageSkills }: Props) {
     if (!skill && state.skills.length > 0) setSkill(state.skills[0].name)
   }, [state.skills])
 
-  // Detect stock change -> insert context marker
   useEffect(() => {
     const code = state.currentStock?.code || null
     if (prevStockRef.current && code && code !== prevStockRef.current) {
       setMessages(p => [...p, { role: 'system', content: `已切换至 ${state.currentStock!.name} (${code})` }])
-      setSid(null) // start fresh session on stock switch
+      setSid(null)
     }
     prevStockRef.current = code
   }, [state.currentStock?.code])
@@ -127,15 +148,17 @@ export default function DiagnosisPanel({ onManageSkills }: Props) {
   const send = async () => {
     if (!input.trim() || loading) return
     const text = input.trim(); setInput('')
-    setMessages(p => [...p, { role: 'user', content: text }]); setLoading(true); setStream(''); setStatus('agent_starting')
+    setMessages(p => [...p, { role: 'user', content: text }])
+    setLoading(true); setStream(''); setStatus('agent_starting')
     let full = ''
     await chatStream({
-      session_id: sid || undefined, skill, message: text,
+      session_id: sid || undefined, skill, use_skill: useSkill, message: text,
       stock_codes: state.currentStock ? [{ code: state.currentStock.code, name: state.currentStock.name }] : [],
     }, {
       onSessionId: id => setSid(id),
       onStatus: s => setStatus(s),
       onContent: c => { full += c; setStream(full); setStatus('') },
+      onLog: () => { if (!status) setStatus('fetching_data') },
       onDone: () => { setMessages(p => [...p, { role: 'assistant', content: full }]); setStream(''); setLoading(false); setStatus('') },
       onError: e => { setMessages(p => [...p, { role: 'assistant', content: `Error: ${e}` }]); setStream(''); setLoading(false); setStatus('') },
     })
@@ -147,7 +170,14 @@ export default function DiagnosisPanel({ onManageSkills }: Props) {
     <div className="chat-panel">
       <div className="chat-header">
         <span className="title">🧠 AI 诊断分析</span>
-        <SkillPicker skills={state.skills} value={skill} onChange={setSkill} />
+        <span style={{ flex: 1 }} />
+        <SkillChip
+          skills={state.skills}
+          skill={skill}
+          useSkill={useSkill}
+          onToggle={() => setUseSkill(v => !v)}
+          onPick={setSkill}
+        />
         <button className="icon-btn" onClick={onManageSkills} title="管理 Skill">⚙</button>
       </div>
 
@@ -160,7 +190,7 @@ export default function DiagnosisPanel({ onManageSkills }: Props) {
           </div>
         )}
         {messages.map((m, i) => <MsgBubble key={i} msg={m} />)}
-        {stream && <MsgBubble msg={{ role: 'assistant', content: stream }} />}
+        {stream && <div className="msg ai"><MemoMarkdown content={stream} /></div>}
         <div ref={bottomRef} />
       </div>
 
