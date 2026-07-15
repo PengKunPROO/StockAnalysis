@@ -51,6 +51,69 @@ def _filter_line(line: str) -> str | None:
     return clean
 
 
+# --- Structured line classification (analysis / log / skip) ---
+
+LOG_PATTERNS = [
+    re.compile(r'^curl\s'),
+    re.compile(r'^Remote:'),
+    re.compile(r'^Project root:'),
+    re.compile(r'^import\s'),
+    re.compile(r'^pip\s'),
+    re.compile(r'^npm\s'),
+    re.compile(r'^```\w*'),
+    re.compile(r'^name:'),
+    re.compile(r'^description:'),
+    re.compile(r'^mode:'),
+    re.compile(r'^[A-Z][a-z]+:'),  # "Key:" style config lines
+    # English-only ### headings (skill echo): no CJK chars
+    re.compile(r'^#+\s+[A-Za-z][A-Za-z\s,/()\-:]+$'),
+]
+
+CLASSIFY_SKIP_PATTERNS = [
+    re.compile(r'^Query:'),
+    re.compile(r'^Initializing agent'),
+    re.compile(r'^[─╭╰═╮╯┊]+'),
+    re.compile(r'^Resume this session'),
+    re.compile(r'^Session:'),
+    re.compile(r'^Duration:'),
+    re.compile(r'^Messages:'),
+    re.compile(r'^---'),
+    re.compile(r'^hermes --resume'),
+    re.compile(r'^\s*┊\s'),
+    re.compile(r'^\s*$'),
+]
+
+
+def _has_cjk(text: str) -> bool:
+    """Return True if text contains any CJK character."""
+    for ch in text:
+        if '\u4e00' <= ch <= '\u9fff' or '\u3000' <= ch <= '\u303f':
+            return True
+    return False
+
+
+def _classify_line(line: str) -> tuple[str, str | None]:
+    """Classify a hermes output line as analysis, log, or skip.
+
+    Returns (type, content) where type is "analysis" | "log" | "skip".
+    For "skip", content is None.
+    """
+    clean = ANSI_RE.sub('', line).rstrip('\n')
+    # Skip
+    for pat in CLASSIFY_SKIP_PATTERNS:
+        if pat.match(clean):
+            return "skip", None
+    # Log
+    for pat in LOG_PATTERNS:
+        if pat.match(clean):
+            return "log", clean
+    # Empty after strip
+    if not clean.strip():
+        return "skip", None
+    # Everything else is analysis
+    return "analysis", clean
+
+
 def _resolve_hermes_binary() -> list[str]:
     """Resolve the hermes command, handling Windows .cmd/.bat wrappers."""
     # On Windows, npm-installed CLIs ship as .cmd files. subprocess.Popen with
