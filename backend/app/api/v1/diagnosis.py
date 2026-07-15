@@ -178,7 +178,6 @@ async def chat(req: ChatRequest):
         loop.run_in_executor(executor, _read_subprocess, prompt, queue, ready_event)
 
         full_output = ""
-        in_analysis = False
         line_count = 0
         returncode = 0
         stderr_text = ""
@@ -186,14 +185,9 @@ async def chat(req: ChatRequest):
         while True:
             # Use a timeout so we can send keepalive comments during long
             # silences (hermes can take 60-120s curling APIs before any output).
-            # Without keepalives, the Vite proxy / browser considers the SSE
-            # connection dead and throws "network error".
             try:
                 item = await asyncio.wait_for(queue.get(), timeout=15.0)
             except asyncio.TimeoutError:
-                # Send an SSE comment as keepalive. Comments (lines starting
-                # with ":") are ignored by the EventSource/fetch SSE parser
-                # but keep the TCP connection alive through proxies.
                 yield ": keepalive\n\n"
                 continue
 
@@ -207,27 +201,12 @@ async def chat(req: ChatRequest):
             line = item if isinstance(item, str) else str(item)
             line_count += 1
 
-            if not in_analysis:
-                clean = ANSI_RE.sub('', line)
-                if ANALYSIS_START.search(clean):
-                    in_analysis = True
-                    continue
-                # Fallback: if no analysis marker found after 30 lines,
-                # start treating all non-skip lines as content
-                if line_count > 30:
-                    in_analysis = True
-                    # Fall through to process this line as content
-                else:
-                    continue
-
-            clean = ANSI_RE.sub('', line)
-            if ANALYSIS_END.search(clean):
-                continue
-
+            # No more ANALYSIS_START gate - hermes v0.17+ doesn't use the ╭─ banner.
+            # Just filter skip patterns and output everything else.
             filtered = _filter_line(line)
             if filtered is not None:
                 full_output += filtered + "\n"
-                if "$" in filtered and "curl" in filtered:
+                if "curl" in filtered:
                     yield f'data: {json.dumps({"status": "fetching_data"}, ensure_ascii=False)}\n\n'
                 chunk = filtered + "\n"
                 yield f"data: {json.dumps({'content': chunk}, ensure_ascii=False)}\n\n"
