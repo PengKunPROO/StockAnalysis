@@ -24,11 +24,13 @@ export default function TransactionForm({ onSubmit, prefillCode, prefillName }: 
   const [nameLoading, setNameLoading] = useState(false)
   const lookupTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  const isAShare = code.startsWith('sh.') || code.startsWith('sz.')
+
   // Auto-fill stock name when code changes (debounced)
   useEffect(() => {
     if (lookupTimer.current) clearTimeout(lookupTimer.current)
     if (!code || code.length < 2) return
-    if (name && code.startsWith(('sh.', 'sz.'))) return
+    if (name && (code.startsWith('sh.') || code.startsWith('sz.') || code.startsWith('us.'))) return
     lookupTimer.current = setTimeout(async () => {
       setNameLoading(true)
       try {
@@ -45,7 +47,27 @@ export default function TransactionForm({ onSubmit, prefillCode, prefillName }: 
     return () => { if (lookupTimer.current) clearTimeout(lookupTimer.current) }
   }, [code])
 
-  const isAShare = code.startsWith(('sh.', 'sz.'))
+  // Auto-fill stock code when name changes (debounced, reverse lookup)
+  useEffect(() => {
+    if (lookupTimer.current) clearTimeout(lookupTimer.current)
+    if (!name || name.trim().length < 2) return
+    if (code && (code.startsWith('sh.') || code.startsWith('sz.') || code.startsWith('us.'))) return
+    lookupTimer.current = setTimeout(async () => {
+      setNameLoading(true)
+      try {
+        const data = await stockLookup(name.trim())
+        if (data.results.length > 0) {
+          const best = data.results[0]
+          setCode(best.code)
+          setName(best.name)
+        }
+      } catch { /* ignore */ } finally {
+        setNameLoading(false)
+      }
+    }, 500)
+    return () => { if (lookupTimer.current) clearTimeout(lookupTimer.current) }
+  }, [name])
+
   const sharesNum = parseInt(shares, 10)
   // Buy: must be 100 multiples. Sell: can be any positive number.
   const sharesInvalid = shares && isAShare && action === 'buy' && (isNaN(sharesNum) || sharesNum % 100 !== 0)
@@ -108,6 +130,7 @@ export default function TransactionForm({ onSubmit, prefillCode, prefillName }: 
         <div className="field">
           <label>股数{isAShare && action === 'buy' ? ' (100整倍)' : ''}</label>
           <input type="number" value={shares} onChange={e => setShares(e.target.value)}
+            step={isAShare && action === 'buy' ? 100 : 1}
             style={{ width: 60, border: sharesInvalid ? '1px solid var(--up)' : undefined }} placeholder="100" />
         </div>
         <div className="field">

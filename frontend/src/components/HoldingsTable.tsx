@@ -23,12 +23,13 @@ export default function HoldingsTable({ holdings, realtimePrices, onDelete, onSe
   const [nameLoading, setNameLoading] = useState(false)
   const lookupTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  const isAShare = addCode.startsWith('sh.') || addCode.startsWith('sz.')
+
   // Auto-fill stock name when code changes (debounced)
   useEffect(() => {
     if (lookupTimer.current) clearTimeout(lookupTimer.current)
     if (!addCode || addCode.length < 2) return
-    // Skip if already has prefix and name is set
-    if (addName && addCode.startsWith(('sh.', 'sz.'))) return
+    if (addName && (addCode.startsWith('sh.') || addCode.startsWith('sz.') || addCode.startsWith('us.'))) return
     lookupTimer.current = setTimeout(async () => {
       setNameLoading(true)
       try {
@@ -45,7 +46,26 @@ export default function HoldingsTable({ holdings, realtimePrices, onDelete, onSe
     return () => { if (lookupTimer.current) clearTimeout(lookupTimer.current) }
   }, [addCode])
 
-  const isAShare = addCode.startsWith(('sh.', 'sz.'))
+  // Auto-fill stock code when name changes (debounced, reverse lookup)
+  useEffect(() => {
+    if (lookupTimer.current) clearTimeout(lookupTimer.current)
+    if (!addName || addName.trim().length < 2) return
+    if (addCode && (addCode.startsWith('sh.') || addCode.startsWith('sz.') || addCode.startsWith('us.'))) return
+    lookupTimer.current = setTimeout(async () => {
+      setNameLoading(true)
+      try {
+        const data = await stockLookup(addName.trim())
+        if (data.results.length > 0) {
+          const best = data.results[0]
+          setAddCode(best.code)
+          setAddName(best.name)
+        }
+      } catch { /* ignore */ } finally {
+        setNameLoading(false)
+      }
+    }, 500)
+    return () => { if (lookupTimer.current) clearTimeout(lookupTimer.current) }
+  }, [addName])
   const sharesNum = parseInt(addShares, 10)
   const sharesInvalid = addShares && isAShare && (isNaN(sharesNum) || sharesNum % 100 !== 0)
 
@@ -105,7 +125,7 @@ export default function HoldingsTable({ holdings, realtimePrices, onDelete, onSe
           </div>
           <div className="field">
             <label style={{ fontSize: '0.6rem', color: 'var(--muted)' }}>股数{isAShare ? ' (100整倍)' : ''}</label>
-            <input type="number" placeholder="100" value={addShares} onChange={e => setAddShares(e.target.value)} style={{ width: 60, background: 'var(--bg)', border: sharesInvalid ? '1px solid var(--up)' : '1px solid var(--border)', borderRadius: 4, color: 'var(--heading)', padding: '4px 8px', fontSize: '0.72rem' }} />
+            <input type="number" placeholder="100" step={isAShare ? 100 : 1} value={addShares} onChange={e => setAddShares(e.target.value)} style={{ width: 60, background: 'var(--bg)', border: sharesInvalid ? '1px solid var(--up)' : '1px solid var(--border)', borderRadius: 4, color: 'var(--heading)', padding: '4px 8px', fontSize: '0.72rem' }} />
           </div>
           <div className="field">
             <label style={{ fontSize: '0.6rem', color: 'var(--muted)' }}>成本价</label>
