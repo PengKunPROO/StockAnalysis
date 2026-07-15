@@ -22,21 +22,25 @@ export default function TransactionForm({ onSubmit, prefillCode, prefillName }: 
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [nameLoading, setNameLoading] = useState(false)
-  const lookupTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const codeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const nameTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const autoFilled = useRef(false)
 
   const isAShare = code.startsWith('sh.') || code.startsWith('sz.')
 
   // Auto-fill stock name when code changes (debounced)
   useEffect(() => {
-    if (lookupTimer.current) clearTimeout(lookupTimer.current)
+    if (codeTimer.current) clearTimeout(codeTimer.current)
     if (!code || code.length < 2) return
+    if (autoFilled.current) { autoFilled.current = false; return }
     if (name && (code.startsWith('sh.') || code.startsWith('sz.') || code.startsWith('us.'))) return
-    lookupTimer.current = setTimeout(async () => {
+    codeTimer.current = setTimeout(async () => {
       setNameLoading(true)
       try {
         const data = await stockLookup(code)
         if (data.results.length > 0) {
           const best = data.results[0]
+          autoFilled.current = true
           setCode(best.code)
           setName(best.name)
         }
@@ -44,20 +48,22 @@ export default function TransactionForm({ onSubmit, prefillCode, prefillName }: 
         setNameLoading(false)
       }
     }, 500)
-    return () => { if (lookupTimer.current) clearTimeout(lookupTimer.current) }
+    return () => { if (codeTimer.current) clearTimeout(codeTimer.current) }
   }, [code])
 
-  // Auto-fill stock code when name changes (debounced, reverse lookup)
+  // Auto-fill stock code when name changes (reverse lookup, debounced)
   useEffect(() => {
-    if (lookupTimer.current) clearTimeout(lookupTimer.current)
+    if (nameTimer.current) clearTimeout(nameTimer.current)
     if (!name || name.trim().length < 2) return
+    if (autoFilled.current) { autoFilled.current = false; return }
     if (code && (code.startsWith('sh.') || code.startsWith('sz.') || code.startsWith('us.'))) return
-    lookupTimer.current = setTimeout(async () => {
+    nameTimer.current = setTimeout(async () => {
       setNameLoading(true)
       try {
         const data = await stockLookup(name.trim())
         if (data.results.length > 0) {
           const best = data.results[0]
+          autoFilled.current = true
           setCode(best.code)
           setName(best.name)
         }
@@ -65,7 +71,7 @@ export default function TransactionForm({ onSubmit, prefillCode, prefillName }: 
         setNameLoading(false)
       }
     }, 500)
-    return () => { if (lookupTimer.current) clearTimeout(lookupTimer.current) }
+    return () => { if (nameTimer.current) clearTimeout(nameTimer.current) }
   }, [name])
 
   const sharesNum = parseInt(shares, 10)
@@ -111,7 +117,7 @@ export default function TransactionForm({ onSubmit, prefillCode, prefillName }: 
         <div className="field">
           <label>股票代码</label>
           <input type="text" placeholder="sh.600519 或 600519" value={code}
-            onChange={e => { setCode(e.target.value); setName('') }} />
+            onChange={e => setCode(e.target.value)} />
         </div>
         <div className="field">
           <label>{nameLoading ? '搜索中...' : '名称'}</label>

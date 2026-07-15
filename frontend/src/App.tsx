@@ -64,7 +64,7 @@ function Sidebar() {
       <div className="sidebar-list">
         {displayList.map(s => (
           <div key={s.code} className={`sidebar-item ${state.currentStock?.code === s.code ? 'selected' : ''}`}
-            onClick={() => dispatch({ type: 'SET_STOCK', stock: { code: s.code, name: s.name, market: s.market, industry: '' } })}>
+            onClick={() => { dispatch({ type: 'SET_STOCK', stock: { code: s.code, name: s.name, market: s.market, industry: '' } }); dispatch({ type: 'SET_VIEW', view: 'stock' }) }}>
             <span className="name">{s.name}</span>
             <span className="code">{s.code?.replace('sh.', '').replace('sz.', '')}</span>
             <span className="del" onClick={e => deleteStock(s.code, e)} title="删除自选">×</span>

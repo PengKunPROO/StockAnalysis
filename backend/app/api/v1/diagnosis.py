@@ -51,14 +51,37 @@ def _filter_line(line: str) -> str | None:
     return clean
 
 
-def _read_subprocess(prompt: str, output_queue):
+def _resolve_hermes_binary() -> list[str]:
+    """Resolve the hermes command, handling Windows .cmd/.bat wrappers."""
+    # On Windows, npm-installed CLIs ship as .cmd files. subprocess.Popen with
+    # a list and shell=False cannot find "hermes" unless we append .cmd or use
+    # shutil.which. Prefer shutil.which for robustness.
+    import shutil
+    resolved = shutil.which("hermes")
+    if resolved:
+        return [resolved]
+    # Fallback: let the shell resolve it (PATH lookup incl. PATHEXT on Windows)
+    return ["hermes"]
+
+
+def _read_subprocess(prompt: str, output_queue, ready_event):
     try:
         env = {**os.environ, "NO_COLOR": "1"}
-        proc = subprocess.Popen(
-            ["hermes", "chat", "-q", prompt],
+        cmd = _resolve_hermes_binary()
+        kwargs = dict(
             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             env=env, text=True, encoding="utf-8", errors="replace",
         )
+        # On Windows, if hermes is a .cmd/.bat wrapper that wasn't resolved by
+        # shutil.which, we need shell=True to let cmd.exe find it via PATHEXT.
+        if cmd == ["hermes"]:
+            kwargs["shell"] = True
+            cmd = "hermes chat -q " + _shell_quote(prompt)
+        else:
+            cmd = cmd + ["chat", "-q", prompt]
+        proc = subprocess.Popen(cmd, **kwargs)
+        # Signal that the process has started (so the async loop knows Popen succeeded)
+        ready_event.set()
         for line in proc.stdout:
             output_queue.put_nowait(line)
         proc.wait()
@@ -67,8 +90,20 @@ def _read_subprocess(prompt: str, output_queue):
         output_queue.put_nowait(None)
         output_queue.put_nowait(proc.returncode)
         output_queue.put_nowait(stderr_text)
+    except FileNotFoundError:
+        ready_event.set()
+        output_queue.put_nowait(
+            RuntimeError("hermes command not found in PATH. Install Hermes CLI first.")
+        )
     except Exception as e:
+        ready_event.set()
         output_queue.put_nowait(e)
+
+
+def _shell_quote(s: str) -> str:
+    """Quote a string for safe inclusion in a shell command."""
+    import shlex
+    return shlex.quote(s)
 
 router = APIRouter(prefix="/diagnosis", tags=["diagnosis"])
 
@@ -133,13 +168,14 @@ async def chat(req: ChatRequest):
 """
 
     async def event_stream():
-        yield f'data: {{"session_id": "{sid}"}}\n\n'
+        yield f'data: {json.dumps({"session_id": sid}, ensure_ascii=False)}\n\n'
         yield f'data: {json.dumps({"status": "agent_starting"}, ensure_ascii=False)}\n\n'
 
         queue = asyncio.Queue()
         loop = asyncio.get_event_loop()
         executor = ThreadPoolExecutor(max_workers=1)
-        loop.run_in_executor(executor, _read_subprocess, prompt, queue)
+        ready_event = asyncio.Event()
+        loop.run_in_executor(executor, _read_subprocess, prompt, queue, ready_event)
 
         full_output = ""
         in_analysis = False
@@ -148,7 +184,19 @@ async def chat(req: ChatRequest):
         stderr_text = ""
 
         while True:
-            item = await queue.get()
+            # Use a timeout so we can send keepalive comments during long
+            # silences (hermes can take 60-120s curling APIs before any output).
+            # Without keepalives, the Vite proxy / browser considers the SSE
+            # connection dead and throws "network error".
+            try:
+                item = await asyncio.wait_for(queue.get(), timeout=15.0)
+            except asyncio.TimeoutError:
+                # Send an SSE comment as keepalive. Comments (lines starting
+                # with ":") are ignored by the EventSource/fetch SSE parser
+                # but keep the TCP connection alive through proxies.
+                yield ": keepalive\n\n"
+                continue
+
             if item is None:
                 break
             if isinstance(item, Exception):
@@ -180,15 +228,15 @@ async def chat(req: ChatRequest):
             if filtered is not None:
                 full_output += filtered + "\n"
                 if "$" in filtered and "curl" in filtered:
-                    yield f'data: {json.dumps({{"status": "fetching_data"}}, ensure_ascii=False)}\n\n'
+                    yield f'data: {json.dumps({"status": "fetching_data"}, ensure_ascii=False)}\n\n'
                 chunk = filtered + "\n"
                 yield f"data: {json.dumps({'content': chunk}, ensure_ascii=False)}\n\n"
 
         # Read final signals
         try:
-            returncode = await queue.get()
-            stderr_text = await queue.get()
-        except Exception:
+            returncode = await asyncio.wait_for(queue.get(), timeout=5.0)
+            stderr_text = await asyncio.wait_for(queue.get(), timeout=5.0)
+        except (asyncio.TimeoutError, Exception):
             returncode = -1
             stderr_text = ""
 
@@ -203,7 +251,15 @@ async def chat(req: ChatRequest):
         await save_message(sid, "assistant", content=full_output.strip())
         yield f"data: {json.dumps({'done': True}, ensure_ascii=False)}\n\n"
 
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",  # Disable nginx buffering if behind proxy
+            "Connection": "keep-alive",
+        },
+    )
 
 
 @router.get("/sessions")

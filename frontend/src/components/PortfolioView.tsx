@@ -19,27 +19,35 @@ export default function PortfolioView() {
   const leftRef = useRef<HTMLDivElement>(null)
   const bodyRef = useRef<HTMLDivElement>(null)
 
-  // Realtime prices fetched from backend
   const [realtimePrices, setRealtimePrices] = useState<Record<string, { price: number; change_pct: number }>>({})
+  const [holdingsError, setHoldingsError] = useState<string | null>(null)
 
   const loadRealtimePrices = useCallback(async () => {
-    if (holdings.length === 0) return
     try {
       const data = await getHoldingsRealtime()
       setRealtimePrices(data.prices || {})
-    } catch {
-      // silently fail - holdings will show avg_cost as fallback
+    } catch (e) {
+      // Realtime fetch failed (e.g. non-trading hours, network) — leave prices empty
+      // so consumers can show "--" instead of falling back to avg_cost as current price.
+      console.warn('Failed to load realtime prices:', e)
+      setRealtimePrices({})
     }
-  }, [holdings.length])
+  }, [])
 
-  useEffect(() => { loadRealtimePrices() }, [loadRealtimePrices])
+  // Reload realtime prices whenever holdings change OR after a transaction is added/removed.
+  // Depending on `holdings` alone is insufficient when length is unchanged (e.g. avg_cost
+  // updates after a buy of an existing code); txRefreshKey covers that case explicitly.
+  useEffect(() => { loadRealtimePrices() }, [holdings, txRefreshKey, loadRealtimePrices])
 
   const loadHoldings = useCallback(async () => {
     try {
       const data = await getHoldings()
       setHoldings(data.holdings || [])
-    } catch {
+      setHoldingsError(null)
+    } catch (e) {
+      console.error('Failed to load holdings:', e)
       setHoldings([])
+      setHoldingsError('持仓加载失败，请稍后重试')
     }
   }, [])
 
@@ -55,16 +63,24 @@ export default function PortfolioView() {
   useEffect(() => { loadHoldings() }, [loadHoldings])
   useEffect(() => { loadReport(reportDate) }, [loadReport, reportDate])
 
-  // Reload holdings when transactions change
-  const onTransactionChange = useCallback(() => {
+  // Reload holdings (and dependent realtime prices via the effect above) after a transaction
+  // is created or deleted. Await so callers know the refresh is complete.
+  const onTransactionChange = useCallback(async () => {
     setTxRefreshKey(k => k + 1)
-    loadHoldings()
-    loadRealtimePrices()
+    await loadHoldings()
+    // Explicitly refresh realtime prices too; the holdings effect covers the common case
+    // but this guards against the same-length holdings edge case.
+    await loadRealtimePrices()
   }, [loadHoldings, loadRealtimePrices])
 
   const handleDeleteHolding = async (id: number) => {
-    await deleteHolding(id)
-    loadHoldings()
+    try {
+      await deleteHolding(id)
+      await loadHoldings()
+      await loadRealtimePrices()
+    } catch (e) {
+      console.error('Failed to delete holding:', e)
+    }
   }
 
   const handleSell = (holding: Holding) => {
@@ -79,7 +95,9 @@ export default function PortfolioView() {
   }) => {
     try {
       await createTransaction(data)
-      onTransactionChange()
+      // Await the full refresh so the dashboard/holdings reflect the new transaction
+      // before this promise resolves (TransactionForm relies on this for feedback).
+      await onTransactionChange()
     } catch (e) {
       console.error('Transaction submit failed:', e)
       throw e
@@ -90,25 +108,25 @@ export default function PortfolioView() {
     setGenerating(true)
     try {
       await generateReport()
-      // Poll report status until completed or failed (max 5 min)
       const startTime = Date.now()
       const poll = async () => {
-        if (Date.now() - startTime > 300000) { // 5 min timeout
+        if (Date.now() - startTime > 300000) {
           setGenerating(false)
           return
         }
-        await loadReport(reportDate)
-        // Check if report is completed or failed
         try {
           const r = await getReport(reportDate)
-          if (r && (r.status === 'completed' || r.status === 'failed')) {
-            setGenerating(false)
-            return
+          if (r) {
+            setReport(r)
+            if (r.status === 'completed' || r.status === 'failed') {
+              setGenerating(false)
+              return
+            }
           }
-        } catch {}
-        setTimeout(poll, 10000) // poll every 10s
+        } catch { /* report not yet created, will retry */ }
+        setTimeout(poll, 10000)
       }
-      setTimeout(poll, 5000) // first check after 5s
+      setTimeout(poll, 5000)
     } catch {
       setGenerating(false)
     }
@@ -122,14 +140,25 @@ export default function PortfolioView() {
     setLeftWidth(w => Math.max(30, Math.min(70, w + deltaPct)))
   }, [])
 
-  // Calculate dashboard metrics
+  // Calculate dashboard metrics.
+  // When realtime prices are unavailable (non-trading hours, API down), we must NOT
+  // fall back to avg_cost for "current price" — that makes totalMarketValue === totalCost
+  // and PnL appear as 0, which looks like a data bug. Instead, track whether any realtime
+  // data is available; if not, the dashboard shows the cost-based value with no PnL claim.
+  const hasRealtime = holdings.length > 0 && holdings.some(h => {
+    const rt = realtimePrices[h.code]
+    return rt && rt.price > 0
+  })
   const totalMarketValue = holdings.reduce((sum, h) => {
-    const price = realtimePrices[h.code]?.price ?? h.avg_cost
+    const rt = realtimePrices[h.code]
+    const price = rt && rt.price > 0 ? rt.price : h.avg_cost
     return sum + h.shares * price
   }, 0)
   const totalCost = holdings.reduce((sum, h) => sum + h.shares * h.avg_cost, 0)
-  const totalPnl = totalMarketValue - totalCost
-  const pnlPct = totalCost > 0 ? (totalPnl / totalCost) * 100 : 0
+  // Only claim a PnL when we actually have realtime prices; otherwise show 0 PnL
+  // (the dashboard distinguishes "no realtime data" via the hasRealtime flag below).
+  const totalPnl = hasRealtime ? totalMarketValue - totalCost : 0
+  const pnlPct = hasRealtime && totalCost > 0 ? (totalPnl / totalCost) * 100 : 0
   const todayChange = 0 // Would come from realtime data
   const todayChangePct = 0
 
@@ -146,6 +175,17 @@ export default function PortfolioView() {
       </div>
 
       <div className="content" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, padding: '12px 16px', gap: 12 }}>
+        {/* Status banners */}
+        {holdingsError && (
+          <div style={{ padding: '6px 12px', background: 'var(--surface2)', border: '1px solid var(--down)', borderRadius: 6, color: 'var(--down)', fontSize: '0.75rem' }}>
+            ⚠ {holdingsError}
+          </div>
+        )}
+        {!holdingsError && holdings.length > 0 && !hasRealtime && (
+          <div style={{ padding: '6px 12px', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--muted)', fontSize: '0.75rem' }}>
+            ⓘ 实时行情暂不可用（非交易时段或接口异常），市值按成本价估算，盈亏显示为 -- 
+          </div>
+        )}
         {/* Dashboard Cards */}
         <PortfolioDashboard
           holdings={holdings}

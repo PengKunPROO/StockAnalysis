@@ -45,6 +45,7 @@ const BASE = '/api/v1/portfolio'
 
 export async function getHoldings(): Promise<{ holdings: Holding[] }> {
   const r = await fetch(`${BASE}/holdings`)
+  if (!r.ok) throw new Error(`获取持仓失败: ${r.status}`)
   return r.json()
 }
 
@@ -61,7 +62,8 @@ export async function createHolding(data: {
 }
 
 export async function deleteHolding(id: number): Promise<void> {
-  await fetch(`${BASE}/holdings/${id}`, { method: 'DELETE' })
+  const r = await fetch(`${BASE}/holdings/${id}`, { method: 'DELETE' })
+  if (!r.ok) throw new Error(`删除持仓失败: ${r.status}`)
 }
 
 export async function getHoldingsRealtime(): Promise<{
@@ -69,6 +71,7 @@ export async function getHoldingsRealtime(): Promise<{
   errors: Array<{ code: string; error: string }> | null
 }> {
   const r = await fetch(`${BASE}/holdings/realtime`)
+  if (!r.ok) throw new Error(`获取实时行情失败: ${r.status}`)
   return r.json()
 }
 
@@ -97,6 +100,7 @@ export async function createTransaction(data: {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   })
+  if (!r.ok) throw new Error(`创建交易失败: ${r.status}`)
   return r.json()
 }
 

@@ -21,21 +21,25 @@ export default function HoldingsTable({ holdings, realtimePrices, onDelete, onSe
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [nameLoading, setNameLoading] = useState(false)
-  const lookupTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const codeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const nameTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const autoFilled = useRef(false)
 
   const isAShare = addCode.startsWith('sh.') || addCode.startsWith('sz.')
 
   // Auto-fill stock name when code changes (debounced)
   useEffect(() => {
-    if (lookupTimer.current) clearTimeout(lookupTimer.current)
+    if (codeTimer.current) clearTimeout(codeTimer.current)
     if (!addCode || addCode.length < 2) return
+    if (autoFilled.current) { autoFilled.current = false; return }
     if (addName && (addCode.startsWith('sh.') || addCode.startsWith('sz.') || addCode.startsWith('us.'))) return
-    lookupTimer.current = setTimeout(async () => {
+    codeTimer.current = setTimeout(async () => {
       setNameLoading(true)
       try {
         const data = await stockLookup(addCode)
         if (data.results.length > 0) {
           const best = data.results[0]
+          autoFilled.current = true
           setAddCode(best.code)
           setAddName(best.name)
         }
@@ -43,20 +47,22 @@ export default function HoldingsTable({ holdings, realtimePrices, onDelete, onSe
         setNameLoading(false)
       }
     }, 500)
-    return () => { if (lookupTimer.current) clearTimeout(lookupTimer.current) }
+    return () => { if (codeTimer.current) clearTimeout(codeTimer.current) }
   }, [addCode])
 
-  // Auto-fill stock code when name changes (debounced, reverse lookup)
+  // Auto-fill stock code when name changes (reverse lookup, debounced)
   useEffect(() => {
-    if (lookupTimer.current) clearTimeout(lookupTimer.current)
+    if (nameTimer.current) clearTimeout(nameTimer.current)
     if (!addName || addName.trim().length < 2) return
+    if (autoFilled.current) { autoFilled.current = false; return }
     if (addCode && (addCode.startsWith('sh.') || addCode.startsWith('sz.') || addCode.startsWith('us.'))) return
-    lookupTimer.current = setTimeout(async () => {
+    nameTimer.current = setTimeout(async () => {
       setNameLoading(true)
       try {
         const data = await stockLookup(addName.trim())
         if (data.results.length > 0) {
           const best = data.results[0]
+          autoFilled.current = true
           setAddCode(best.code)
           setAddName(best.name)
         }
@@ -64,7 +70,7 @@ export default function HoldingsTable({ holdings, realtimePrices, onDelete, onSe
         setNameLoading(false)
       }
     }, 500)
-    return () => { if (lookupTimer.current) clearTimeout(lookupTimer.current) }
+    return () => { if (nameTimer.current) clearTimeout(nameTimer.current) }
   }, [addName])
   const sharesNum = parseInt(addShares, 10)
   const sharesInvalid = addShares && isAShare && (isNaN(sharesNum) || sharesNum % 100 !== 0)
@@ -117,7 +123,7 @@ export default function HoldingsTable({ holdings, realtimePrices, onDelete, onSe
         <div style={{ padding: '8px 12px', background: 'var(--surface2)', borderBottom: '1px solid var(--border)', display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <div className="field">
             <label style={{ fontSize: '0.6rem', color: 'var(--muted)' }}>代码</label>
-            <input type="text" placeholder="sh.600519 或 600519" value={addCode} onChange={e => { setAddCode(e.target.value); setAddName('') }} style={{ width: 120, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--heading)', padding: '4px 8px', fontSize: '0.72rem' }} />
+            <input type="text" placeholder="sh.600519 或 600519" value={addCode} onChange={e => setAddCode(e.target.value)} style={{ width: 120, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--heading)', padding: '4px 8px', fontSize: '0.72rem' }} />
           </div>
           <div className="field">
             <label style={{ fontSize: '0.6rem', color: 'var(--muted)' }}>{nameLoading ? '搜索中...' : '名称'}</label>

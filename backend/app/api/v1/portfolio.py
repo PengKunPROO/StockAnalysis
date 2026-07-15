@@ -242,6 +242,29 @@ async def delete_transaction(tx_id: int):
 # === Reports ===
 
 from app.portfolio.report import generate_report as run_report_generation
+import logging as _logging
+
+_report_logger = _logging.getLogger("app.portfolio.report_api")
+
+# Strong references to background report-generation tasks.
+# Without these, asyncio may garbage-collect the task and silently cancel it.
+_background_tasks: set = set()
+
+
+async def _run_report_safely(report_date: date, report_id: str):
+    """Wrapper that ensures report status is always updated, even on crash."""
+    factory = get_session_factory()
+    try:
+        await run_report_generation(report_date)
+    except Exception as e:
+        _report_logger.error("Background report generation crashed: %s", e, exc_info=True)
+        # Ensure status is set to "failed" so the frontend stops polling
+        # and shows an error instead of hanging on "generating" forever.
+        try:
+            async with factory() as s:
+                await queries.update_report(s, report_id, status="failed")
+        except Exception:
+            pass
 
 
 @router.get("/reports")
@@ -328,14 +351,24 @@ async def get_report_by_date(report_date: date):
 async def generate_report_api():
     import asyncio
     today = date.today()
-    # Run in background
-    asyncio.create_task(run_report_generation(today))
     factory = get_session_factory()
     async with factory() as session:
-        report = await queries.get_report_by_date(session, today)
-        if report:
-            return {"report_id": report.id, "status": "generating"}
-        return {"status": "generating"}
+        existing = await queries.get_report_by_date(session, today)
+        if existing:
+            await queries.update_report(session, existing.id, status="generating")
+            report_id = existing.id
+        else:
+            report = await queries.create_report(session, today)
+            report_id = report.id
+
+    # IMPORTANT: asyncio.create_task() returns a Task that will be garbage-
+    # collected if no strong reference is held, causing the task to be silently
+    # cancelled mid-flight (Python asyncio pitfall). Store the task in a module-
+    # level set to keep it alive until completion.
+    task = asyncio.create_task(_run_report_safely(today, report_id))
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+    return {"report_id": report_id, "status": "generating"}
 
 
 # === Report Contexts ===
