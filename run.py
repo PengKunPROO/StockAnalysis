@@ -39,11 +39,12 @@ def _read_pid() -> int | None:
                 try:
                     if os.name == "nt":
                         # Windows: use tasklist to check if process exists
+                        # encoding=None lets Python auto-detect (handles GBK on Chinese Windows)
                         result = subprocess.run(
                             ["tasklist", "/FI", f"PID eq {pid}", "/NH"],
-                            capture_output=True, text=True
+                            capture_output=True, encoding="utf-8", errors="replace"
                         )
-                        if str(pid) in result.stdout:
+                        if result.stdout and str(pid) in result.stdout:
                             return pid
                     else:
                         os.kill(pid, 0)  # Unix: signal 0 = check existence
