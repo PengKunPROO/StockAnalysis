@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useApp } from '../contexts/AppContext'
 import { streamSignalsAI } from '../api/signals'
 
@@ -12,6 +12,12 @@ export default function SignalsPanel() {
   const [aiReasoning, setAiReasoning] = useState('')
   const [aiLoading, setAiLoading] = useState(false)
   const [aiError, setAiError] = useState('')
+
+  // Reset AI state when stock changes
+  useEffect(() => {
+    setAiText(''); setAiReasoning(''); setAiError(''); setAiLoading(false)
+  }, [code])
+
   const runAi = useCallback(async () => {
     if (!code || aiLoading) return
     setAiText(''); setAiReasoning(''); setAiError(''); setAiLoading(true)
