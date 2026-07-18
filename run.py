@@ -30,6 +30,16 @@ def _is_port_in_use() -> bool:
         return s.connect_ex(("127.0.0.1", PORT)) == 0
 
 
+def _is_backend_ready() -> bool:
+    """Check if backend is actually responding (not just port open)."""
+    import urllib.request
+    try:
+        r = urllib.request.urlopen(f"http://127.0.0.1:{PORT}/api/v1/health", timeout=2)
+        return r.status == 200
+    except Exception:
+        return False
+
+
 def _read_pid() -> int | None:
     if PID_FILE.exists():
         try:
@@ -197,10 +207,10 @@ def _run_background():
         cwd=str(BACKEND),
     )
 
-    # 等待端口就绪
-    for _ in range(8):
+    # 等待后端真正就绪（health check 通过，而非仅端口开放）
+    for _ in range(20):
         time.sleep(1)
-        if _is_port_in_use():
+        if _is_backend_ready():
             break
     else:
         print("启动超时！请检查 backend/.venv 和依赖。")
