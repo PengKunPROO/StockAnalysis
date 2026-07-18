@@ -34,8 +34,8 @@ set /a count=0
 timeout /t 1 /nobreak >NUL
 set /a count+=1
 curl -s http://127.0.0.1:8002/api/v1/health >NUL 2>&1
-if %errorlevel% neq 0 if %count% lss 15 goto wait_be
-if %count% geq 15 echo WARNING: backend may not be ready
+if %errorlevel% neq 0 if %count% lss 30 goto wait_be
+if %count% geq 30 echo WARNING: backend may not be ready
 
 :: Frontend - hidden via VBS
 echo [2/2] Starting frontend on :5173...

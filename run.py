@@ -192,23 +192,24 @@ def _run_background():
         _show_status()
         return
 
-    # 用 pythonw 后台启动 (无窗口)
+    # 重新用 pythonw 后台启动 (无窗口，日志写入文件方便调试)
     pythonw = sys.executable.replace("python.exe", "pythonw.exe")
     if not Path(pythonw).exists():
         pythonw = sys.executable  # fallback
-
-    # 重新用 pythonw 执行自身的前台模式
+    log_file = Path(__file__).parent / "backend.log"
+    log_fh = open(log_file, "w", encoding="utf-8", errors="replace")
     proc = subprocess.Popen(
         [pythonw, str(Path(__file__).resolve()), "--serve"],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        stdout=log_fh,
+        stderr=subprocess.STDOUT,
         stdin=subprocess.DEVNULL,
         creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
         cwd=str(BACKEND),
     )
 
     # 等待后端真正就绪（health check 通过，而非仅端口开放）
-    for _ in range(20):
+    # 后端启动后会处理前端请求（K线/行情等），可能阻塞health check，给足时间
+    for _ in range(30):
         time.sleep(1)
         if _is_backend_ready():
             break
