@@ -198,7 +198,7 @@ def _run_background():
     )
 
     # 等待端口就绪
-    for _ in range(15):
+    for _ in range(8):
         time.sleep(1)
         if _is_port_in_use():
             break
@@ -207,7 +207,8 @@ def _run_background():
         return
 
     print("Stock Agent 已在后台启动。")
-    print(f"  访问: http://localhost:{PORT}")
+    print(f"  前端: http://localhost:5173")
+    print(f"  后端: http://localhost:{PORT}")
     print(f"  停止: python run.py --stop")
     print(f"  状态: python run.py --status")
 

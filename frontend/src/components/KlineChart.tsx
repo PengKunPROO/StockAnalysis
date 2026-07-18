@@ -22,23 +22,36 @@ export default function KlineChart() {
   useEffect(() => {
     if (!containerRef.current || chartRef.current) return
 
-    const chart = createChart(containerRef.current, {
-      layout: { background: { type: ColorType.Solid, color: '#0a0a20' }, textColor: '#c8c8e0' },
-      grid: { vertLines: { color: '#1a1a3a' }, horzLines: { color: '#1a1a3a' } },
-      crosshair: { mode: CrosshairMode.Normal },
-      rightPriceScale: { borderColor: '#1a1a3a' },
-      timeScale: { borderColor: '#1a1a3a', timeVisible: true },
-    })
-    chartRef.current = chart
+    // Wait for container to have non-zero dimensions (may be display:none initially)
+    const tryCreate = () => {
+      if (!containerRef.current) return
+      const w = containerRef.current.offsetWidth
+      const h = containerRef.current.offsetHeight
+      if (w === 0 || h === 0) {
+        // Container not visible yet, retry in 100ms
+        setTimeout(tryCreate, 100)
+        return
+      }
+      if (chartRef.current) return // double-check
+      const chart = createChart(containerRef.current, {
+        layout: { background: { type: ColorType.Solid, color: '#0a0a20' }, textColor: '#c8c8e0' },
+        grid: { vertLines: { color: '#1a1a3a' }, horzLines: { color: '#1a1a3a' } },
+        crosshair: { mode: CrosshairMode.Normal },
+        rightPriceScale: { borderColor: '#1a1a3a' },
+        timeScale: { borderColor: '#1a1a3a', timeVisible: true },
+      })
+      chartRef.current = chart
 
-    const cs = chart.addSeries(CandlestickSeries, {
-      upColor: '#00e5ff', downColor: '#ff3366', borderUpColor: '#00e5ff', borderDownColor: '#ff3366',
-      wickUpColor: '#00e5ff', wickDownColor: '#ff3366',
-    })
-    candleRef.current = cs
-    const vs = chart.addSeries(HistogramSeries, { priceFormat: { type: 'volume' }, priceScaleId: '' })
-    volRef.current = vs
-    chart.priceScale('').applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } })
+      const cs = chart.addSeries(CandlestickSeries, {
+        upColor: '#00e5ff', downColor: '#ff3366', borderUpColor: '#00e5ff', borderDownColor: '#ff3366',
+        wickUpColor: '#00e5ff', wickDownColor: '#ff3366',
+      })
+      candleRef.current = cs
+      const vs = chart.addSeries(HistogramSeries, { priceFormat: { type: 'volume' }, priceScaleId: '' })
+      volRef.current = vs
+      chart.priceScale('').applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } })
+    }
+    tryCreate()
 
     return () => chart.remove()
   }, [])

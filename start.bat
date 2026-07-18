@@ -6,6 +6,7 @@ echo === Stock Agent ===
 echo [CLEAN] Killing leftover processes...
 for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":8002 " ^| findstr "LISTENING"') do taskkill /F /PID %%a >NUL 2>&1
 for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":5173 " ^| findstr "LISTENING"') do taskkill /F /PID %%a >NUL 2>&1
+if exist ".stock-agent.pid" del /q ".stock-agent.pid"
 
 :: Git SSH
 echo [SSH]
@@ -22,32 +23,31 @@ if not exist "frontend\node_modules\.package-lock.json" (
     cd ..
 )
 
-:: Backend
+:: Backend - pythonw + run.py --bg (windowless, PID-tracked)
 echo [1/2] Starting backend on :8002...
-start "StockAgent-BE" cmd /k "cd /d %~dp0backend && .venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8002"
+backend\.venv\Scripts\pythonw.exe run.py --bg
 
-:: Wait
+:: Wait for backend to be ready
 echo Waiting for backend...
 set /a count=0
 :wait_be
-timeout /t 2 /nobreak >NUL
-set /a count+=2
+timeout /t 1 /nobreak >NUL
+set /a count+=1
 curl -s http://127.0.0.1:8002/api/v1/health >NUL 2>&1
-if %errorlevel% neq 0 if %count% lss 40 goto wait_be
-if %count% geq 40 echo WARNING: backend may not be ready
+if %errorlevel% neq 0 if %count% lss 15 goto wait_be
+if %count% geq 15 echo WARNING: backend may not be ready
 
-:: Frontend
+:: Frontend - hidden via VBS
 echo [2/2] Starting frontend on :5173...
-start "StockAgent-FE" cmd /k "cd /d %~dp0frontend && npm run dev"
+wscript "%~dp0fe_bg.vbs"
 
 timeout /t 3 /nobreak >NUL
 echo.
 echo ========================
-echo   Backend : http://localhost:8002/docs
 echo   Frontend: http://localhost:5173
+echo   Backend : http://localhost:8002/docs
 echo ========================
 echo.
-echo To stop: close both StockAgent-BE and StockAgent-FE windows,
-echo   or run: taskkill /FI "WINDOWTITLE eq StockAgent-*" /F
+echo To stop: run stop.bat
 echo.
 pause
