@@ -188,3 +188,74 @@ class TestRunScreener:
             assert "change_pct" in stock["factor_details"]
             assert stock["factor_details"]["change_pct"]["pass"] == True
             assert stock["factor_details"]["change_pct"]["actual"] == 5.5
+
+
+# === AI natural-language scan (Task 1) ===
+
+class TestAIScan:
+    def test_ai_scan_returns_sse_stream(self, client):
+        """AI scan should return SSE text/event-stream."""
+        with patch("app.api.v1.screener._read_subprocess") as mock_sub:
+            # Simulate hermes output
+            def fake_read(prompt, queue, ready_event):
+                ready_event.set()
+                queue.put_nowait("## 选股分析\n")
+                queue.put_nowait("根据您的意图，我筛选出以下股票：\n")
+                queue.put_nowait(None)
+                queue.put_nowait(0)
+                queue.put_nowait("")
+            mock_sub.side_effect = fake_read
+
+            resp = client.post("/api/v1/screener/ai-scan", json={
+                "message": "找超跌反弹股",
+                "skill": "",
+                "use_skill": False,
+            })
+        assert resp.status_code == 200
+        assert "text/event-stream" in resp.headers.get("content-type", "")
+        # Should contain SSE events
+        assert "data:" in resp.text
+        assert '"type"' in resp.text
+
+    def test_ai_scan_with_skill(self, client):
+        """AI scan with skill should include skill content in prompt."""
+        with patch("app.api.v1.screener._read_subprocess") as mock_sub:
+            captured_prompt = []
+            def fake_read(prompt, queue, ready_event):
+                ready_event.set()
+                captured_prompt.append(prompt)
+                queue.put_nowait("分析完成\n")
+                queue.put_nowait(None)
+                queue.put_nowait(0)
+                queue.put_nowait("")
+            mock_sub.side_effect = fake_read
+
+            with patch("app.api.v1.screener._resolve_skill_content", return_value="## 超跌反弹策略\nRSI<30"):
+                resp = client.post("/api/v1/screener/ai-scan", json={
+                    "message": "找超跌股",
+                    "skill": "oversold-bounce",
+                    "use_skill": True,
+                })
+        assert resp.status_code == 200
+        assert "RSI<30" in captured_prompt[0]
+
+    def test_ai_scan_without_skill(self, client):
+        """AI scan with use_skill=False should NOT include skill content."""
+        with patch("app.api.v1.screener._read_subprocess") as mock_sub:
+            captured_prompt = []
+            def fake_read(prompt, queue, ready_event):
+                ready_event.set()
+                captured_prompt.append(prompt)
+                queue.put_nowait("分析完成\n")
+                queue.put_nowait(None)
+                queue.put_nowait(0)
+                queue.put_nowait("")
+            mock_sub.side_effect = fake_read
+
+            resp = client.post("/api/v1/screener/ai-scan", json={
+                "message": "找超跌股",
+                "skill": "oversold-bounce",
+                "use_skill": False,
+            })
+        assert resp.status_code == 200
+        assert "超跌反弹策略" not in captured_prompt[0]
