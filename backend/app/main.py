@@ -32,8 +32,15 @@ async def lifespan(app: FastAPI):
         start_scheduler()
     except Exception as e:
         logger.warning(f"Scheduler not started: {e}")
-    health = await engine.health()
-    logger.info(f"Startup health: {health}")
+    # Health check in background (don't block startup - it takes 12s+ due to datasource checks)
+    import asyncio as _asyncio
+    async def _bg_health():
+        try:
+            health = await engine.health()
+            logger.info(f"Startup health: {health}")
+        except Exception as e:
+            logger.warning(f"Startup health check failed: {e}")
+    _asyncio.create_task(_bg_health())
 
     # Auto-open browser after short delay
     if _open_browser:
