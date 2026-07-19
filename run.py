@@ -94,8 +94,11 @@ def _stop_existing():
         return
     try:
         if os.name == "nt":
-            # Windows: taskkill WITHOUT /T (don't kill children - hermes agent is a child)
-            subprocess.run(["taskkill", "/F", "/PID", str(pid)],
+            # Windows: taskkill /T kills the backend AND its child processes
+            # (including hermes chat subprocesses spawned by diagnosis.py)
+            # This is intentional - we want to clean up backend-spawned hermes
+            # but NOT hermes agents the user started manually (those have a different parent)
+            subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)],
                             capture_output=True)
         else:
             os.kill(pid, signal.SIGTERM)
