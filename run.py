@@ -33,8 +33,11 @@ def _is_port_in_use() -> bool:
 def _is_backend_ready() -> bool:
     """Check if backend is actually responding (not just port open)."""
     import urllib.request
+    # Disable proxy for localhost
+    proxy_handler = urllib.request.ProxyHandler({})
+    opener = urllib.request.build_opener(proxy_handler)
     try:
-        r = urllib.request.urlopen(f"http://127.0.0.1:{PORT}/api/v1/health", timeout=2)
+        r = opener.open(f"http://127.0.0.1:{PORT}/api/v1/health", timeout=2)
         return r.status == 200
     except Exception:
         return False
@@ -188,40 +191,45 @@ def _run_foreground():
 def _run_background():
     pid = _read_pid()
     if pid is not None:
-        print(f"Stock Agent 已在运行 (PID {pid})。")
+        print(f"Stock Agent already running (PID {pid}).")
         _show_status()
         return
 
-    # 重新用 pythonw 后台启动 (无窗口，日志写入文件方便调试)
-    pythonw = sys.executable.replace("python.exe", "pythonw.exe")
-    if not Path(pythonw).exists():
-        pythonw = sys.executable  # fallback
+    # Start --serve in a new process group (survives parent exit)
+    python = sys.executable  # python.exe, not pythonw (pythonw has encoding issues)
     log_file = Path(__file__).parent / "backend.log"
     log_fh = open(log_file, "w", encoding="utf-8", errors="replace")
+
+    # Windows: CREATE_NEW_PROCESS_GROUP + CREATE_NO_WINDOW
+    # The child survives parent exit because it's in a new process group
+    flags = 0
+    if os.name == "nt":
+        flags = 0x00000200 | 0x08000000  # CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW
+
     proc = subprocess.Popen(
-        [pythonw, str(Path(__file__).resolve()), "--serve"],
+        [python, str(Path(__file__).resolve()), "--serve"],
         stdout=log_fh,
         stderr=subprocess.STDOUT,
         stdin=subprocess.DEVNULL,
-        creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+        creationflags=flags,
         cwd=str(BACKEND),
     )
 
-    # 等待后端真正就绪（health check 通过，而非仅端口开放）
-    # 后端启动后会处理前端请求（K线/行情等），可能阻塞health check，给足时间
-    for _ in range(30):
+    # Close log handle in parent (child has its own copy)
+    # Don't close - child still needs it
+
+    # Wait for backend to be ready (health check)
+    for i in range(40):
         time.sleep(1)
         if _is_backend_ready():
             break
     else:
-        print("启动超时！请检查 backend/.venv 和依赖。")
+        print("Startup timeout! Check backend.log")
         return
 
-    print("Stock Agent 已在后台启动。")
-    print(f"  前端: http://localhost:5173")
-    print(f"  后端: http://localhost:{PORT}")
-    print(f"  停止: python run.py --stop")
-    print(f"  状态: python run.py --status")
+    print(f"Stock Agent started. http://localhost:{PORT}")
+    print(f"  Stop:   python run.py --stop")
+    print(f"  Status: python run.py --status")
 
 
 def main():
@@ -232,7 +240,7 @@ def main():
         _show_status()
         return
     if "--serve" in sys.argv:
-        # 内部调用: 实际运行 uvicorn (由 _run_background 启动)
+        # Internal: actual uvicorn runner (launched by --bg)
         _write_pid()
         os.chdir(BACKEND)
         sys.path.insert(0, str(BACKEND))
@@ -243,11 +251,16 @@ def main():
                 "app.main:app",
                 host="127.0.0.1",
                 port=PORT,
-                log_level="warning",
+                log_level="info",
                 access_log=False,
             )
-        except Exception:
-            pass
+        except Exception as e:
+            # Log error to file since stdout goes to log file
+            try:
+                with open(Path(__file__).parent / "backend.log", "a", encoding="utf-8") as f:
+                    f.write(f"\nFATAL: {e}\n")
+            except:
+                pass
         finally:
             _clear_pid()
         return

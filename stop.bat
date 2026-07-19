@@ -19,18 +19,12 @@ for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":5173 " ^| findstr "LISTENIN
 )
 
 :: 4. Kill orphaned hermes subprocesses spawned by the backend
-::    (only kill hermes processes whose parent is the StockAgent backend, NOT all hermes.exe)
 for /f "tokens=2" %%p in ('tasklist /v /fo csv ^| findstr "StockAgent-BE" ^| findstr hermes') do (
     taskkill /F /PID %%p >NUL 2>&1
 )
 
-:: 5. Close all related cmd windows
-taskkill /FI "WINDOWTITLE eq StockAgent-BE*" /F >NUL 2>&1
-taskkill /FI "WINDOWTITLE eq StockAgent-FE*" /F >NUL 2>&1
-taskkill /FI "WINDOWTITLE eq run.py*" /F >NUL 2>&1
-
-:: 6. Clean PID file
+:: 5. Clean PID file
 if exist ".stock-agent.pid" del /q ".stock-agent.pid"
 
-echo All stopped. All windows closed.
+echo All stopped.
 timeout /t 1 /nobreak >NUL
