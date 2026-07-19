@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useApp } from '../contexts/AppContext'
 import { getScreenerFields, getScreenerSkills, runScreener } from '../api/screener'
-import type { FilterField, ScreenerSkill, ScreenResult, FieldValue, FactorDetail } from '../api/screener'
+import type { FilterField, ScreenerSkill, ScreenResult, FieldValue } from '../api/screener'
 import AIScreenerPanel from './AIScreenerPanel'
 
 const SORT_OPTIONS = [

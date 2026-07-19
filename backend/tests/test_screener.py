@@ -9,7 +9,7 @@ from app.screener.fields import (
 class TestFields:
     def test_field_count(self):
         fl = get_fields()
-        assert len(fl) >= 18  # 18+ factors
+        assert len(fl) >= 14  # 14 factors (removed unavailable PE/PB/market_cap/turnover)
 
     def test_all_fields_have_description(self):
         for f in get_fields():
@@ -25,17 +25,15 @@ class TestFields:
 
     def test_snapshot_fields_available(self):
         # These must be available (fuyao snapshot provides them)
-        for name in ["change_pct", "amount", "amplitude", "open", "high", "low"]:
+        for name in ["change_pct", "amount", "amplitude"]:
             f = FIELD_BY_NAME[name]
             assert f.available, f"{name} should be available"
             assert f.pass_phase == 1
 
-    def test_valuation_fields_unavailable(self):
-        # Eastmoney push2 unreachable -> mark unavailable
+    def test_valuation_fields_removed(self):
+        # PE/PB/market_cap/turnover_rate removed (eastmoney push2 unreachable, don't show "unavailable" in UI)
         for name in ["pe_ttm", "pb", "total_mv", "turnover_rate"]:
-            f = FIELD_BY_NAME[name]
-            assert not f.available, f"{name} should be unavailable"
-            assert f.pass_phase == 2
+            assert name not in FIELD_BY_NAME, f"{name} should be removed (not just unavailable)"
 
     def test_financial_fields_available(self):
         for name in ["roe", "debt_ratio"]:
@@ -50,7 +48,7 @@ class TestFields:
             assert FIELD_BY_NAME[name].available
 
     def test_news_fields_available(self):
-        for name in ["on_dragon_tiger", "hot_rank", "main_net_flow"]:
+        for name in ["on_dragon_tiger", "hot_rank"]:
             assert name in FIELD_BY_NAME, f"{name} not defined"
             assert FIELD_BY_NAME[name].available
             assert FIELD_BY_NAME[name].pass_phase == 2
@@ -92,7 +90,7 @@ class TestFields:
         assert TECH_FIELDS.isdisjoint(NEWS_FIELDS)
 
     def test_news_fields_set(self):
-        assert NEWS_FIELDS == {"on_dragon_tiger", "hot_rank", "main_net_flow"}
+        assert NEWS_FIELDS == {"on_dragon_tiger", "hot_rank"}
 
 
 # === Task 2: Engine tests ===

@@ -1,11 +1,11 @@
 """Screener engine: two-pass filter using tonghuashun (同花顺 Financial-API).
 
-Pass 1: fuyao prices/snapshot 全市场分页过滤 change_pct/amount/amplitude/open/high/low.
-Pass 2: 对幸存者(≤50)逐个查:
+Pass 1: fuyao prices/snapshot 全市场(5000条)过滤 change_pct/amount/amplitude.
+Pass 2: 对幸存者(≤100)逐个查:
   - 财务因子 (roe, debt_ratio) via engine.get_financial()
   - 技术因子 (macd_golden_cross, rsi_oversold, boll_breakout, kdj_golden_cross) via compute_signals;
     near_high_drop, change_5d, change_20d via K-line calculation
-  - 消息面因子 (on_dragon_tiger, hot_rank, main_net_flow) via source.fetch_dragon_tiger/hot_stock + eastmoney
+  - 消息面因子 (on_dragon_tiger, hot_rank) via source.fetch_dragon_tiger/hot_stock
 name 用 fuyao ticker-list 补全.
 每只幸存股票返回 factor_details: {factor_name: {actual, threshold, pass}}.
 消息面数据源失败优雅降级，不影响其他因子.
@@ -15,6 +15,7 @@ import time
 from datetime import date, timedelta
 from app.screener.fields import (
     get_fields, matches_snapshot, FIELD_BY_NAME, PASS2_FIELDS, TECH_FIELDS, NEWS_FIELDS, SORTABLE,
+    SNAPSHOT_FIELDS,
 )
 from app.datasources import get_source_for_market
 
@@ -44,32 +45,33 @@ class SkillTemplate:
 SKILLS: list[SkillTemplate] = [
     SkillTemplate(
         "oversold_bounce", "短线超跌反弹",
-        "RSI超卖 + 距52周高点跌幅>30% + 成交额>1亿",
+        "RSI超卖(<30) + 距52周高点跌幅>30% + 成交额>1亿。适合捕捉超跌后的技术性反弹。",
         {"rsi_oversold": True, "near_high_drop": {"min": 30}, "amount": {"min": 100000000}},
     ),
     SkillTemplate(
         "cigarette_butt", "烟蒂股",
-        "ROE>8% + 负债率<60% + 涨幅<2%",
-        {"roe": {"min": 8}, "debt_ratio": {"max": 60}, "change_pct": {"max": 2}},
+        "ROE>8% + 负债率<60% + 涨幅<2%。低估值+稳健基本面，适合逆向投资者。",
+        {"roe": {"min": 8}, "debt_ratio": {"max": 60}, "change_pct": {"max": 2},
+         "amount": {"min": 50000000}},
     ),
     SkillTemplate(
         "value", "长线价值",
-        "高回报低杠杆：ROE>15% + 负债率<50%",
-        {"roe": {"min": 15}, "debt_ratio": {"max": 50}},
+        "高回报低杠杆：ROE>15% + 负债率<50% + 成交额>5000万(排除流动性差的小票)。",
+        {"roe": {"min": 15}, "debt_ratio": {"max": 50}, "amount": {"min": 50000000}},
     ),
     SkillTemplate(
         "technical", "技术转强",
-        "技术面转强：MACD金叉 + 成交额>2亿",
+        "MACD金叉 + 成交额>2亿。技术面转强且资金关注。",
         {"macd_golden_cross": True, "amount": {"min": 200000000}},
     ),
     SkillTemplate(
         "news_driven", "消息面驱动",
-        "龙虎榜上榜 + 主力净流入>0",
-        {"on_dragon_tiger": True, "main_net_flow": {"min": 0}},
+        "龙虎榜上榜 + 热榜排名<200。游资/机构活跃且市场关注度高。",
+        {"on_dragon_tiger": True, "hot_rank": {"max": 200}},
     ),
     SkillTemplate(
         "breakout", "强势突破",
-        "涨幅>3% + 振幅>5% + 成交额>3亿 + BOLL突破上轨",
+        "涨幅>3% + 振幅>5% + 成交额>3亿 + BOLL突破上轨。量价齐升的强势突破。",
         {"change_pct": {"min": 3}, "amplitude": {"min": 5},
          "amount": {"min": 300000000}, "boll_breakout": True},
     ),
@@ -92,7 +94,7 @@ async def _fetch_name_map(source) -> dict[str, str]:
         return {}
 
 
-# 60s 内存缓存: 避免多次筛选重复拉全市场快照+名称映射 (bug5 提速)
+# 60s 内存缓存: 避免多次筛选重复拉全市场快照+名称映射
 _SNAP_CACHE = {"snap": None, "names": None, "ts": 0}
 
 
@@ -101,7 +103,7 @@ async def _get_snapshot_cached(source, ttl: int = 60):
     if _SNAP_CACHE["snap"] is not None and now - _SNAP_CACHE["ts"] < ttl:
         return _SNAP_CACHE["snap"], _SNAP_CACHE["names"]
     snap, names = await asyncio.gather(
-        source.fetch_market_snapshot(limit=500),
+        source.fetch_market_snapshot(limit=5000),
         _fetch_name_map(source),
     )
     _SNAP_CACHE["snap"] = snap
@@ -146,18 +148,6 @@ async def _fetch_hot_rank_map(source) -> dict[str, int]:
         return {}
 
 
-async def _fetch_main_net_flow_map() -> dict[str, float]:
-    """Fetch main net flow via eastmoney. Degrades to empty dict if unavailable."""
-    try:
-        from app.datasources import eastmoney
-        # eastmoney.fetch_north_bound gives market-level north-bound flow, not per-stock.
-        # Per-stock fund flow isn't available via the existing eastmoney.py module.
-        # We degrade gracefully - return empty dict.
-        return {}
-    except Exception:
-        return {}
-
-
 async def _apply_pass2(source, stocks: list[dict], values: dict) -> list[dict]:
     """Pass2: 对幸存者逐个查 financial + technical + news factors.
 
@@ -182,13 +172,10 @@ async def _apply_pass2(source, stocks: list[dict], values: dict) -> list[dict]:
     # Pre-fetch news data (batch) - degrade gracefully
     dt_codes: set[str] = set()
     hot_map: dict[str, int] = {}
-    flow_map: dict[str, float] = {}
     if "on_dragon_tiger" in news_active:
         dt_codes = await _fetch_dragon_tiger_codes(source)
     if "hot_rank" in news_active:
         hot_map = await _fetch_hot_rank_map(source)
-    if "main_net_flow" in news_active:
-        flow_map = await _fetch_main_net_flow_map()
 
     out = []
     for s in stocks:
@@ -203,17 +190,17 @@ async def _apply_pass2(source, stocks: list[dict], values: dict) -> list[dict]:
             except Exception:
                 fin_data = None
 
+        fin_failed = False
         for fname in fin_active:
             val = values[fname]
             actual = fin_data.get(fname) if fin_data else None
             passed = _range_matches(actual, val) if fin_data else False
             factor_details[fname] = _make_detail(actual, val, passed)
+            s[fname] = actual
             if not passed:
-                break  # fail fast
-        else:
-            # Only continue if all financial factors passed (or none active)
-            pass
-        if fin_active and any(not fd["pass"] for fd in factor_details.values()):
+                fin_failed = True
+                break
+        if fin_failed:
             continue
 
         # ── Technical factors (need K-lines) ──
@@ -221,10 +208,8 @@ async def _apply_pass2(source, stocks: list[dict], values: dict) -> list[dict]:
             try:
                 klines, _ = await engine.get_klines(code, "daily", start, end)
                 if not klines:
-                    # Can't compute technicals - fail all tech factors
                     for fname in tech_bool_active:
-                        val = True
-                        factor_details[fname] = _make_detail(False, val, False)
+                        factor_details[fname] = _make_detail(False, True, False)
                     for fname in tech_num_active:
                         val = values[fname]
                         factor_details[fname] = _make_detail(None, val, False)
@@ -234,36 +219,39 @@ async def _apply_pass2(source, stocks: list[dict], values: dict) -> list[dict]:
                     indicators = await compute_all(klines[-90:])
                     fibonacci = await compute_fibonacci_levels(klines)
                     payload = compute_signals(klines, indicators, fibonacci)
-                    active_names = {sig["name"] for sig in payload["active_signals"]}
+                    active_names = {sig["name"] for sig in payload["active_signal"]}
 
                     # Boolean tech signals
+                    tech_bool_failed = False
                     for fname in tech_bool_active:
                         signal_name = TECH_BOOL_SIGNALS[fname]
                         actual = signal_name in active_names
                         factor_details[fname] = _make_detail(actual, True, actual)
                         if not actual:
+                            tech_bool_failed = True
                             break
-                    if tech_bool_active and any(not factor_details[f]["pass"] for f in tech_bool_active):
+                    if tech_bool_failed:
                         continue
 
                     # Numeric tech signals from K-lines
                     last_close = klines[-1]["close"]
+                    tech_num_failed = False
                     for fname in tech_num_active:
                         val = values[fname]
                         actual = _compute_tech_numeric(fname, klines, last_close)
                         passed = _range_matches(actual, val)
                         factor_details[fname] = _make_detail(actual, val, passed)
-                        s[fname] = actual  # store for sorting
+                        s[fname] = actual
                         if not passed:
+                            tech_num_failed = True
                             break
-                    if tech_num_active and any(not factor_details[f]["pass"] for f in tech_num_active):
+                    if tech_num_failed:
                         continue
 
                     # Store signals for reference
                     s["signals"] = sorted(active_names)
                     s["score"] = payload["score"]["pct"]
             except Exception:
-                # K-line fetch failed - fail all tech factors
                 for fname in tech_bool_active:
                     factor_details[fname] = _make_detail(False, True, False)
                 for fname in tech_num_active:
@@ -273,6 +261,7 @@ async def _apply_pass2(source, stocks: list[dict], values: dict) -> list[dict]:
                     continue
 
         # ── News factors ──
+        news_failed = False
         for fname in news_active:
             val = values[fname]
             if fname == "on_dragon_tiger":
@@ -280,39 +269,21 @@ async def _apply_pass2(source, stocks: list[dict], values: dict) -> list[dict]:
                 passed = actual if val is True else _range_matches(1 if actual else 0, val)
                 factor_details[fname] = _make_detail(actual, val, passed)
                 if not passed:
+                    news_failed = True
                     break
             elif fname == "hot_rank":
                 actual = hot_map.get(code)
-                passed = _range_matches(actual, val) if isinstance(val, dict) else (actual is not None)
+                if isinstance(val, dict):
+                    passed = _range_matches(actual, val)
+                else:
+                    passed = actual is not None
                 factor_details[fname] = _make_detail(actual, val, passed)
                 s["hot_rank"] = actual
                 if not passed:
-                    break
-            elif fname == "main_net_flow":
-                actual = flow_map.get(code)
-                # If flow_map is empty (eastmoney unavailable), degrade: skip this factor
-                if not flow_map:
-                    factor_details[fname] = _make_detail(None, val, True)
-                    continue
-                passed = _range_matches(actual, val) if isinstance(val, dict) else (actual is not None)
-                factor_details[fname] = _make_detail(actual, val, passed)
-                s["main_net_flow"] = actual
-                if not passed:
-                    break
-
-        if news_active and any(not factor_details.get(f, {}).get("pass", True) for f in news_active):
-            # Check: only fail if the factor was actually evaluated (not degraded)
-            news_failed = False
-            for fname in news_active:
-                fd = factor_details.get(fname)
-                if fd and not fd["pass"]:
-                    # main_net_flow with None actual and empty flow_map is degraded (pass=True)
-                    if fname == "main_net_flow" and not flow_map:
-                        continue
                     news_failed = True
                     break
-            if news_failed:
-                continue
+        if news_failed:
+            continue
 
         # Stock passed all active Pass2 factors
         s["factor_details"] = factor_details
@@ -327,7 +298,6 @@ def _compute_tech_numeric(fname: str, klines: list[dict], last_close: float) -> 
         return None
     try:
         if fname == "near_high_drop":
-            # 52-week (or available) high
             highs = [k["high"] for k in klines if k.get("high") is not None]
             if not highs:
                 return None
@@ -359,7 +329,7 @@ async def run_screener(values: dict, sort: str = "change_pct", limit: int = 50) 
     if source is None:
         return {"results": [], "count": 0, "warning": "无 A 股数据源"}
 
-    # 全市场快照+名称映射 (60s 缓存, 避免多次筛选重复拉取 - bug5)
+    # 全市场快照+名称映射 (60s 缓存)
     snapshot, name_map = await _get_snapshot_cached(source)
     if not snapshot:
         return {"results": [], "count": 0, "warning": "同花顺行情快照暂不可用，请稍后重试"}
@@ -378,9 +348,9 @@ async def run_screener(values: dict, sort: str = "change_pct", limit: int = 50) 
         for f in PASS2_FIELDS
     )
 
-    # Pass2: financial + technical + news factors (幸存者上限50保延迟可控)
+    # Pass2: financial + technical + news factors (幸存者上限100保延迟可控)
     if has_pass2:
-        survivors = await _apply_pass2(source, survivors[:50], values)
+        survivors = await _apply_pass2(source, survivors[:100], values)
 
     # Build factor_details for Pass1 (snapshot) factors on all results
     for s in survivors:
@@ -388,8 +358,7 @@ async def run_screener(values: dict, sort: str = "change_pct", limit: int = 50) 
             s["factor_details"] = {}
         for fname, val in values.items():
             if fname in s.get("factor_details", {}):
-                continue  # already set in Pass2
-            from app.screener.fields import FIELD_BY_NAME, SNAPSHOT_FIELDS
+                continue
             if fname in SNAPSHOT_FIELDS:
                 field = FIELD_BY_NAME.get(fname)
                 if not field or not field.available:

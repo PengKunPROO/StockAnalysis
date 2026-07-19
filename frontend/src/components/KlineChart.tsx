@@ -53,7 +53,7 @@ export default function KlineChart() {
     }
     tryCreate()
 
-    return () => chart.remove()
+    return () => { if (chartRef.current) { chartRef.current.remove(); chartRef.current = null } }
   }, [])
 
   // Load/update data when stock changes

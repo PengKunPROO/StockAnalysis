@@ -1,6 +1,6 @@
 // frontend/src/components/PortfolioView.tsx
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { getHoldings, deleteHolding, createTransaction, getReport, generateReport, getHoldingsRealtime, stockLookup } from '../api/portfolio'
+import { getHoldings, deleteHolding, createTransaction, getReport, generateReport, getHoldingsRealtime } from '../api/portfolio'
 import type { Holding, ReportDetail } from '../api/portfolio'
 import PortfolioDashboard from './PortfolioDashboard'
 import HoldingsTable from './HoldingsTable'
