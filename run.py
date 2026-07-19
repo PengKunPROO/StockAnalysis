@@ -94,8 +94,8 @@ def _stop_existing():
         return
     try:
         if os.name == "nt":
-            # Windows: taskkill /T kills child processes too
-            subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)],
+            # Windows: taskkill WITHOUT /T (don't kill children - hermes agent is a child)
+            subprocess.run(["taskkill", "/F", "/PID", str(pid)],
                             capture_output=True)
         else:
             os.kill(pid, signal.SIGTERM)
